@@ -1,0 +1,27 @@
+@import "tailwindcss";
+/* form {
+    min-width: 300px;
+} */
+
+@layer base {
+  h1 {
+    font-size: var(--text-3xl);
+  }
+
+  h2 {
+    font-size: var(--text-2xl);
+  }
+
+  h3 {
+    font-size: var(--text-xl);
+  }
+
+  a {
+    color: var(--color-blue-600);
+    text-decoration-line: underline;
+  }
+
+  p {
+    font-size: var(--text-base);
+  }
+}
