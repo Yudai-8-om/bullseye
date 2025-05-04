@@ -1,7 +1,7 @@
 use crate::schema::{stock_data, stock_health_eval};
 use bullseye_api;
 use bullseye_api::table::ConcatStatement;
-use chrono::{Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate};
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,9 @@ pub struct StockData {
     growth_calculated: bool,
 }
 impl StockData {
+    pub fn quarter(&self) -> i16 {
+        self.quarter_str
+    }
     pub fn revenue(&self) -> f64 {
         self.revenue
     }
@@ -128,6 +131,16 @@ impl StockData {
     }
     pub fn operating_cash_flow(&self) -> f64 {
         self.operating_cash_flow
+    }
+    pub fn latest_quarter_data(target_ticker: &str, exc: &str, conn: &mut PgConnection) -> Self {
+        use crate::schema::stock_data::dsl::*;
+        stock_data
+            .filter(ticker.eq(target_ticker))
+            .filter(exchange.eq(exc))
+            .filter(duration.eq("T"))
+            .order((year_str.desc(), quarter_str.desc()))
+            .first::<StockData>(conn)
+            .expect("Cannot load database. Failed to update StockHealth table")
     }
     fn calculate_ratio(&self, conn: &mut PgConnection) {
         use crate::schema::stock_data::dsl::*;
@@ -437,14 +450,26 @@ impl StockHealthEval {
     fn industry(&self) -> &str {
         &self.industry
     }
-    // fn next_earnings_date(&self) -> Option<NaiveDate> {
-    //     self.next_earnings_date
-    // }
+    pub fn next_earnings_date(&self) -> Option<NaiveDate> {
+        self.next_earnings_date
+    }
+    fn revenue_next_year(&self) -> Option<f64> {
+        self.revenue_next_year
+    }
     fn revenue_growth_multi_year(&self) -> Option<f64> {
         self.revenue_growth_multi_year
     }
     fn gross_profit_growth_multi_year(&self) -> Option<f64> {
         self.gross_profit_growth_multi_year
+    }
+    fn latest_net_margin(&self) -> Option<f64> {
+        self.latest_net_margin
+    }
+    fn theoretical_net_margin(&self) -> Option<f64> {
+        self.theoretical_net_margin
+    }
+    fn optimized_net_margin(&self) -> Option<bool> {
+        self.optimized_net_margin
     }
     pub fn last_updated(&self) -> Option<NaiveDate> {
         self.last_updated
@@ -515,29 +540,14 @@ impl StockHealthEval {
         let net_cash_health_metric = curr_net_cash > 0. || -curr_net_cash / curr_net_income < 2.;
         let positive_retained_earnings_metric = curr_retained_earnings > 0.;
         let industry_name = self.industry();
-        println!("industry {industry_name}");
-        let net_margin_factor = match industry_name {
-            "Airlines" => 20.,
-            "Grocery Stores" | "Department Stores" => 9.,
-            "Discount Stores" => 6.,
-            "Apparel Retail" | "Apparel Manufacturing" | "Footwear & Accessories" => 5.,
-            "Banks - Diversified" | "Banks - Regional" => 4.,
-            "Internet Retail" | "Specialty Retail" => 3.5,
-            "Specialty Industrial Machinery" => 2.5,
-            "Semiconductors"
-            | "Semiconductor Equipment & Materials"
-            | "Auto Manufacturers"
-            | "Auto Parts"
-            | "Consumer Electronics"
-            | "Electrical Equipment & Parts" => 2.,
-            _ => 3.,
-        };
+        let net_margin_factor = get_net_margin_factor(industry_name);
         let curr_theoretical_net_margin = match curr_gross_margin {
             Some(val) => val / net_margin_factor,
             None => 100. / net_margin_factor,
         };
 
-        let curr_optimized_net_margin = curr_theoretical_net_margin <= curr_net_margin;
+        let curr_optimized_net_margin = curr_theoretical_net_margin <= curr_net_margin
+            && curr_operating_margin > curr_net_margin;
         let curr_theoretical_net_income = match curr_optimized_net_margin {
             true => curr_revenue * curr_net_margin / 100.,
             false => curr_revenue * curr_theoretical_net_margin / 100.,
@@ -560,10 +570,6 @@ impl StockHealthEval {
         let curr_theoretical_price_multi_gp = self.gross_profit_growth_multi_year().map(|val| {
             curr_theoretical_eps * calculate_growth_adjustment_factor(val - curr_shares_change_yoy)
         });
-        //TODO:
-        let curr_next_yr_growth = 25. - curr_shares_change_yoy;
-        let curr_theoretical_price_next_yr =
-            curr_theoretical_eps * calculate_growth_adjustment_factor(curr_next_yr_growth);
         diesel::update(
             stock_health_eval
                 .filter(stock_health_eval::ticker.eq(target_ticker))
@@ -590,14 +596,62 @@ impl StockHealthEval {
             price_current_gp_growth.eq(curr_theoretical_price_gp),
             price_multi_year_revenue_growth.eq(curr_theoretical_price_multi_rev),
             price_multi_year_gp_growth.eq(curr_theoretical_price_multi_gp),
-            //temp
-            revenue_growth_next_year.eq(curr_next_yr_growth),
-            price_next_year_revenue_growth.eq(curr_theoretical_price_next_yr),
         ))
         .execute(conn)
         .expect("Failed to update table. Check connection");
     }
 
+    fn assess_estimate(&self, target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+        use crate::schema::stock_data::dsl::*;
+        use crate::schema::stock_health_eval::dsl::*;
+        use crate::schema::{stock_data, stock_health_eval};
+        let target = stock_data // TODO: assuming gross margin is not empty
+            .filter(stock_data::ticker.eq(target_ticker))
+            .filter(stock_data::exchange.eq(exc))
+            .filter(duration.eq("Y"))
+            .order((year_str.desc(), quarter_str.desc()))
+            .limit(1)
+            .first::<StockData>(conn)
+            .expect("Cannot load database. Failed to update StockHealth table");
+        let curr_rev = target.revenue();
+        let next_yr_rev = self.revenue_next_year();
+        let next_yr_rev_growth =
+            next_yr_rev.map(|val| ((val / curr_rev * 100. - 100.) * 100.).round() / 100.);
+        // let industry_name = self.industry();
+        let curr_net_margin_optimized = self.optimized_net_margin();
+        let curr_theoretical_net_margin = self.theoretical_net_margin();
+        let curr_net_margin = self.latest_net_margin();
+        let curr_shares_diluted = target.shares_outstanding_diluted();
+        let curr_shares_change_yoy = target.shares_change_yoy();
+        // let net_margin_factor = get_net_margin_factor(industry_name);
+        let next_theoretical_net_income = match curr_net_margin_optimized {
+            Some(true) => {
+                next_yr_rev.and_then(|rev: f64| curr_net_margin.map(|margin| rev * margin / 100.))
+            }
+            Some(false) => next_yr_rev
+                .and_then(|rev| curr_theoretical_net_margin.map(|margin| rev * margin / 100.)),
+            None => None,
+        };
+        let next_theoretical_eps =
+            next_theoretical_net_income.map(|income| income / curr_shares_diluted);
+        let next_yr_theoretical_price = next_theoretical_eps.and_then(|eps| {
+            next_yr_rev_growth.map(|growth| {
+                eps * calculate_growth_adjustment_factor(growth - curr_shares_change_yoy)
+            })
+        });
+        diesel::update(
+            stock_health_eval
+                .filter(stock_health_eval::ticker.eq(target_ticker))
+                .filter(stock_health_eval::exchange.eq(exc)),
+        )
+        .set((
+            revenue_growth_next_year.eq(next_yr_rev_growth),
+            theoretical_net_income_next_year.eq(next_theoretical_net_income),
+            price_next_year_revenue_growth.eq(next_yr_theoretical_price),
+        ))
+        .execute(conn)
+        .expect("Failed to update table. Check connection");
+    }
     fn calculate_trend(&self, target_ticker: &str, exc: &str, conn: &mut PgConnection) {
         use crate::schema::stock_data::dsl::*;
         use crate::schema::stock_health_eval::dsl::*;
@@ -723,6 +777,21 @@ pub fn update_earnings_date(
     .execute(conn)
     .expect("Failed to update table. Check connection");
 }
+pub fn fill_temp_earnings_date(target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+    use crate::schema::stock_health_eval::dsl::*;
+    let target = StockHealthEval::search(target_ticker, exc, conn);
+    let next_temp_date = target
+        .next_earnings_date()
+        .map(|date| date + Duration::days(80));
+    diesel::update(
+        stock_health_eval
+            .filter(ticker.eq(target_ticker))
+            .filter(exchange.eq(exc)),
+    )
+    .set(next_earnings_date.eq(next_temp_date))
+    .execute(conn)
+    .expect("Failed to update table. Check connection");
+}
 
 pub fn update_price(target_ticker: &str, exc: &str, price: Option<f64>, conn: &mut PgConnection) {
     use crate::schema::stock_health_eval::dsl::*;
@@ -735,6 +804,22 @@ pub fn update_price(target_ticker: &str, exc: &str, price: Option<f64>, conn: &m
         latest_price.eq(price),
         last_updated.eq(Local::now().date_naive()),
     ))
+    .execute(conn)
+    .expect("Failed to update table. Check connection");
+}
+pub fn update_estimate(
+    target_ticker: &str,
+    exc: &str,
+    next_yr_rev: Option<f64>,
+    conn: &mut PgConnection,
+) {
+    use crate::schema::stock_health_eval::dsl::*;
+    diesel::update(
+        stock_health_eval
+            .filter(ticker.eq(target_ticker))
+            .filter(exchange.eq(exc)),
+    )
+    .set((revenue_next_year.eq(next_yr_rev),))
     .execute(conn)
     .expect("Failed to update table. Check connection");
 }
@@ -752,13 +837,40 @@ pub fn run_eval_prep<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) {
 }
 
 pub fn run_eval<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) {
-    use crate::schema::stock_health_eval::dsl::*;
-    let target: StockHealthEval = stock_health_eval
+    let target = StockHealthEval::search(symbol, exc, conn);
+    // let target: StockHealthEval = stock_health_eval
+    //     .filter(ticker.eq(symbol))
+    //     .filter(exchange.eq(exc))
+    //     .first::<StockHealthEval>(conn)
+    //     .expect("cannot load database");
+    target.assess_basic_health(symbol, exc, conn);
+    let reloaded_target = StockHealthEval::search(symbol, exc, conn);
+    reloaded_target.assess_estimate(symbol, exc, conn);
+}
+
+pub fn run_sim<'a>(
+    symbol: &str,
+    exc: &str,
+    sim_net_margin: u8,
+    sim_growth: u8,
+    conn: &mut PgConnection,
+) -> f64 {
+    use crate::schema::stock_data::dsl::*;
+    let target = stock_data
         .filter(ticker.eq(symbol))
         .filter(exchange.eq(exc))
-        .first::<StockHealthEval>(conn)
-        .expect("cannot load database");
-    target.assess_basic_health(symbol, exc, conn);
+        .filter(duration.eq("T"))
+        .order((year_str.desc(), quarter_str.desc()))
+        .limit(1)
+        .first::<StockData>(conn)
+        .expect("Cannot load database. Failed to simulate");
+    let sim_net_margin: f64 = sim_net_margin as f64;
+    let sim_growth: f64 = sim_growth as f64;
+    let sim_theoretical_eps =
+        target.revenue() * sim_net_margin / 100. / target.shares_outstanding_diluted();
+    let sim_price = sim_theoretical_eps
+        * calculate_growth_adjustment_factor(sim_growth - target.shares_change_yoy());
+    sim_price
 }
 
 fn sum_options(options: Vec<Option<f64>>) -> Option<f64> {
@@ -800,6 +912,24 @@ fn calculate_growth_adjustment_factor(growth: f64) -> f64 {
     };
     let factor = (adjusted_growth.powi(10) / 2.6 * 10. + 5.) * punishment;
     factor
+}
+fn get_net_margin_factor(industry: &str) -> f64 {
+    match industry {
+        "Airlines" => 20.,
+        "Grocery Stores" | "Department Stores" => 9.,
+        "Discount Stores" => 6.,
+        "Apparel Retail" | "Apparel Manufacturing" | "Footwear & Accessories" => 5.,
+        "Banks - Diversified" | "Banks - Regional" => 4.,
+        "Internet Retail" | "Specialty Retail" => 3.5,
+        "Specialty Industrial Machinery" => 2.5,
+        "Semiconductors"
+        | "Semiconductor Equipment & Materials"
+        | "Auto Manufacturers"
+        | "Auto Parts"
+        | "Consumer Electronics"
+        | "Electrical Equipment & Parts" => 2.,
+        _ => 3.,
+    }
 }
 
 #[derive(Insertable)]
@@ -858,6 +988,7 @@ impl<'a> NewStockHealthEval<'a> {
         industry_str: &'a str,
         next_earnings: Option<NaiveDate>,
         price: Option<f64>,
+        next_yr_rev: Option<f64>,
     ) -> Self {
         NewStockHealthEval {
             exchange: bullseye_api::table::get_exchange_string(exc),
@@ -881,7 +1012,7 @@ impl<'a> NewStockHealthEval<'a> {
             no_share_dilution: None,
             improving_share_dilution: None,
             latest_revenue: None,
-            revenue_next_year: None,
+            revenue_next_year: next_yr_rev,
             revenue_growth_1y: None,
             revenue_growth_multi_year: None,
             revenue_growth_next_year: None,
@@ -914,6 +1045,7 @@ pub async fn add_new_eval<'a>(
     industry_str: &str,
     earnings_date: Option<String>,
     price: Option<f64>,
+    next_yr_rev: Option<f64>,
     conn: &mut PgConnection,
 ) {
     use crate::schema::stock_health_eval::dsl::*;
@@ -926,6 +1058,7 @@ pub async fn add_new_eval<'a>(
         industry_str,
         next_earnings,
         price,
+        next_yr_rev,
     )
     .await;
 

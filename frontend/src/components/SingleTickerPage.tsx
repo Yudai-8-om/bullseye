@@ -130,6 +130,10 @@ function SingleTickerPage() {
                   {healthEval?.latestGrossMargin?.toFixed(2) ?? "-"}%
                 </p>
                 <p>
+                  <span className="font-bold">Operating Margin (TTM): </span>
+                  {healthEval?.latestOperatingMargin?.toFixed(2) ?? "-"}%
+                </p>
+                <p>
                   <span className="font-bold">Net Margin (TTM): </span>
                   {healthEval?.latestNetMargin?.toFixed(2) ?? "-"}%
                 </p>
@@ -152,8 +156,9 @@ function SingleTickerPage() {
                   {getLowestPriceTarget([
                     healthEval?.priceCurrentRevenueGrowth,
                     healthEval?.priceMultiYearRevenueGrowth,
-                    healthEval?.priceMultiYearRevenueGrowth,
+                    healthEval?.priceMultiYearGpGrowth,
                     healthEval?.priceCurrentGpGrowth,
+                    healthEval?.priceNextYearRevenueGrowth,
                   ])}
                 </h1>
               </div>

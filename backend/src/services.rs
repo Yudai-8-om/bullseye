@@ -1,0 +1,135 @@
+use crate::db;
+use bullseye_api::table;
+use bullseye_api::{self, client::ScraperError};
+// use chrono::{Duration, Local};
+use db::NewStockEntry;
+use diesel::pg::PgConnection;
+
+/// This function adds new ticker data in the database.
+///
+/// # Arguments
+///
+/// * `new_ticker` - The ticker you are adding
+/// * `exchange` - Exchange enum
+/// * `conn` - PgConnection(diesel) instance
+///
+/// # Returns
+///
+/// * `Ok(())` if the operation was successful.
+/// * `Err(ScraperError)` if an error occurred during scraping or database insertion.
+pub async fn handle_new_ticker(
+    new_ticker: &str,
+    exchange: &table::Exchange,
+    conn: &mut PgConnection,
+) -> Result<(), ScraperError> {
+    let (
+        concat_statement_ttm,
+        concat_statement_annual,
+        currency,
+        industry,
+        earnings_date,
+        price,
+        next_yr_rev,
+    ) = bullseye_api::scrape_init(new_ticker, exchange).await?;
+    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
+        .into_iter()
+        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
+        .collect();
+    let annual_entries: Vec<NewStockEntry> = concat_statement_annual
+        .into_iter()
+        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
+        .collect();
+    db::insert_stock_data_batch(ttm_entries, conn);
+    db::insert_stock_data_batch(annual_entries, conn);
+    db::update_growths(conn);
+    db::update_ratios(conn);
+    db::add_new_eval(
+        new_ticker,
+        exchange,
+        &currency,
+        &industry,
+        earnings_date,
+        price,
+        next_yr_rev,
+        conn,
+    )
+    .await;
+    Ok(())
+}
+
+/// This function update data upon earnings and price changes.
+///
+/// # Arguments
+///
+/// * `ticker` - The ticker you are updating
+/// * `exchange` - Exchange enum
+/// * `conn` - PgConnection(diesel) instance
+///
+/// # Returns
+///
+/// * `Ok(())` if the operation was successful.
+/// * `Err(ScraperError)` if an error occurred during scraping or database insertion.
+pub async fn update_earnings_all(
+    ticker: &str,
+    exchange: &table::Exchange,
+    conn: &mut PgConnection,
+) -> Result<(), ScraperError> {
+    let (concat_statement_ttm, concat_statement_annual, earnings_date, price, next_yr_rev) =
+        bullseye_api::scrape_annual_update(ticker, exchange).await?;
+    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
+        .into_iter()
+        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
+        .collect();
+    let annual_entries: Vec<NewStockEntry> = concat_statement_annual
+        .into_iter()
+        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
+        .collect();
+    db::insert_stock_data_batch(ttm_entries, conn);
+    db::insert_stock_data_batch(annual_entries, conn);
+    db::update_growths(conn);
+    db::update_ratios(conn);
+    db::fill_temp_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
+    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
+    db::update_estimate(
+        &ticker,
+        table::get_exchange_string(&exchange),
+        next_yr_rev,
+        conn,
+    );
+    Ok(())
+}
+
+pub async fn update_earnings_ttm(
+    ticker: &str,
+    exchange: &table::Exchange,
+    conn: &mut PgConnection,
+) -> Result<(), ScraperError> {
+    let (concat_statement_ttm, earnings_date, price) =
+        bullseye_api::scrape_quarter_update(ticker, exchange).await?;
+    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
+        .into_iter()
+        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
+        .collect();
+    db::insert_stock_data_batch(ttm_entries, conn);
+    db::update_growths(conn);
+    db::update_ratios(conn);
+    db::fill_temp_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
+    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
+    Ok(())
+}
+
+pub async fn update_price(
+    ticker: &str,
+    exchange: &table::Exchange,
+    conn: &mut PgConnection,
+) -> Result<(), ScraperError> {
+    let (earnings_date, price) = bullseye_api::scrape_regular_update(ticker, exchange).await?;
+    db::update_earnings_date(
+        ticker,
+        table::get_exchange_string(&exchange),
+        earnings_date,
+        conn,
+    );
+    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
+    Ok(())
+}

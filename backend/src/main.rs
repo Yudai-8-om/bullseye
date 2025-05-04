@@ -1,14 +1,16 @@
 // use axum::http::StatusCode;
 use axum::{extract::Path, routing::get, Json, Router};
 use bullseye_api::table;
-use bullseye_api::table::{ConcatStatement, FinancialStatement};
+use bullseye_api::table::FinancialStatement;
 use bullseye_api::{self, client::ScraperError};
-use chrono::Local;
-use db::{NewStockEntry, StockData, StockHealthEval};
-use http::Method;
+use chrono::{Duration, Local};
+use db::{StockData, StockHealthEval};
+// use http::Method;
+use serde::Deserialize;
 use tower_http::cors::{Any, CorsLayer};
 mod db;
 mod schema;
+mod services;
 
 async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, ScraperError> {
     let exchange = match ticker.parse::<u64>() {
@@ -17,62 +19,37 @@ async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, Scr
     };
     let conn = &mut db::establish_connection();
     if !StockHealthEval::is_ticker_existed(&ticker, table::get_exchange_string(&exchange), conn) {
-        println!("Ticker doesn't exist in database.");
-        let (
-            concat_statement_ttm,
-            concat_statement_annual,
-            currency,
-            industry,
-            earnings_date,
-            price,
-        ) = bullseye_api::scrape_init(&ticker, &exchange).await?;
-        let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
-            .into_iter()
-            .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-            .collect();
-        let annual_entries: Vec<NewStockEntry> = concat_statement_annual
-            .into_iter()
-            .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-            .collect();
-        db::insert_stock_data_batch(ttm_entries, conn);
-        db::insert_stock_data_batch(annual_entries, conn);
-        db::update_growths(conn);
-        db::update_ratios(conn);
-        db::add_new_eval(
-            &ticker,
-            &exchange,
-            &currency,
-            &industry,
-            earnings_date,
-            price,
-            conn,
-        )
-        .await;
+        services::handle_new_ticker(&ticker, &exchange, conn).await?;
     } else {
         let target =
             db::StockHealthEval::search(&ticker, table::get_exchange_string(&exchange), conn);
-        let update_needed = target
-            .last_updated()
-            .map(|last_updated| last_updated < Local::now().date_naive());
-        let (earnings_date, price) = bullseye_api::scrape_update(&ticker, &exchange).await?;
-        if let Some(true) | None = update_needed {
-            println!("Updating Earnings Date and Price");
-            db::update_earnings_date(
+        let earnings_update_needed = target
+            .next_earnings_date()
+            .map(|earnings_date| Local::now().date_naive() - earnings_date > Duration::days(3));
+        if let Some(true) | None = earnings_update_needed {
+            let latest_earnings = db::StockData::latest_quarter_data(
                 &ticker,
                 table::get_exchange_string(&exchange),
-                earnings_date,
                 conn,
             );
-            db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
+            if latest_earnings.quarter() == 3 {
+                services::update_earnings_all(&ticker, &exchange, conn).await?;
+            } else {
+                services::update_earnings_ttm(&ticker, &exchange, conn).await?;
+            }
         } else {
-            println!("No Database updates needed");
+            let price_update_needed = target
+                .last_updated()
+                .map(|last_updated| last_updated < Local::now().date_naive());
+            if let Some(true) | None = price_update_needed {
+                services::update_price(&ticker, &exchange, conn).await?;
+            }
         }
     }
     db::run_eval_prep(&ticker, table::get_exchange_string(&exchange), conn);
     db::run_eval(&ticker, table::get_exchange_string(&exchange), conn);
     let healtheval =
         db::StockHealthEval::search(&ticker, table::get_exchange_string(&exchange), conn);
-    println!("Completed!");
     Ok(Json(healtheval))
 }
 
@@ -87,38 +64,31 @@ async fn evaluate(Path(ticker): Path<String>) {
     println!("Completed!");
 }
 
-// async fn write_data(Path(ticker): Path<String>) -> Result<(), ScraperError> {
-//     let exchange = match ticker.parse::<u64>() {
-//         Ok(_) => table::Exchange::TSE,
-//         Err(_) => table::Exchange::NASDAQ,
-//     };
-//     let concat_statement_ttm =
-//         bullseye_api::scrape_init(&ticker, &exchange, table::Term::TTM).await?;
-//     // if let Err(_) = concat_statement_ttm {
-//     //     return Err("TTM data scrape error".to_string());
-//     // }
-//     let concat_statement_annual =
-//         bullseye_api::scrape_init(&ticker, &exchange, table::Term::Annual).await?;
-//     // if let Err(_) = concat_statement_annual {
-//     //     return Err("Annual data scrape error".to_string());
-//     // }
-//     let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
-//         .into_iter()
-//         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-//         .collect();
-//     let annual_entries: Vec<NewStockEntry> = concat_statement_annual
-//         .into_iter()
-//         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-//         .collect();
-//     let conn = &mut db::establish_connection();
-//     db::insert_stock_data_batch(ttm_entries, conn);
-//     db::insert_stock_data_batch(annual_entries, conn);
-//     db::add_new_eval(&ticker, &exchange, conn).await;
-//     db::update_growths(conn);
-//     db::update_ratios(conn);
-//     println!("Completed!");
-//     Ok(())
-// }
+//Temporary-----------------------------------------
+#[derive(Deserialize)]
+struct Params {
+    ticker: String,
+    net_margin: u8,
+    growth: u8,
+}
+
+async fn simulate(Path(params): Path<Params>) {
+    let exchange = match params.ticker.parse::<u64>() {
+        Ok(_) => table::Exchange::TSE,
+        Err(_) => table::Exchange::NASDAQ,
+    };
+    let conn = &mut db::establish_connection();
+    let sim_price = db::run_sim(
+        &params.ticker,
+        table::get_exchange_string(&exchange),
+        params.net_margin,
+        params.growth,
+        conn,
+    );
+    println!("Simulated Price: {sim_price}");
+}
+
+// temporary-------------------------------------
 
 async fn print_stock_data() -> Json<Vec<StockData>> {
     let conn = &mut db::establish_connection();
@@ -143,11 +113,11 @@ async fn main() {
     // .allow_methods([Method::GET, Method::POST]);
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
-        // .route("/write/{ticker}", get(write_data))
         .route("/search/{ticker}", get(search))
         .route("/print", get(print_stock_data))
         .route("/printeval", get(print_eval_data))
         .route("/evaluate/{ticker}", get(evaluate))
+        .route("/simulate/{ticker}/{net_margin}/{growth}", get(simulate))
         .layer(cors);
 
     // run our app with hyper, listening globally on port 3000
