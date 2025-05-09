@@ -768,27 +768,26 @@ pub fn update_earnings_date(
     use crate::schema::stock_health_eval::dsl::*;
     let next_earnings =
         earnings_date.map(|date_str| NaiveDate::parse_from_str(&date_str, "%b %d, %Y").unwrap());
+    let valid_next_earnings = next_earnings.filter(|&date| {
+        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(3)
+    });
     diesel::update(
         stock_health_eval
             .filter(ticker.eq(target_ticker))
             .filter(exchange.eq(exc)),
     )
-    .set(next_earnings_date.eq(next_earnings))
+    .set(next_earnings_date.eq(valid_next_earnings))
     .execute(conn)
     .expect("Failed to update table. Check connection");
 }
-pub fn fill_temp_earnings_date(target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+pub fn empty_earnings_date(target_ticker: &str, exc: &str, conn: &mut PgConnection) {
     use crate::schema::stock_health_eval::dsl::*;
-    let target = StockHealthEval::search(target_ticker, exc, conn);
-    let next_temp_date = target
-        .next_earnings_date()
-        .map(|date| date + Duration::days(80));
     diesel::update(
         stock_health_eval
             .filter(ticker.eq(target_ticker))
             .filter(exchange.eq(exc)),
     )
-    .set(next_earnings_date.eq(next_temp_date))
+    .set(next_earnings_date.eq::<Option<NaiveDate>>(None))
     .execute(conn)
     .expect("Failed to update table. Check connection");
 }
@@ -1051,12 +1050,15 @@ pub async fn add_new_eval<'a>(
     use crate::schema::stock_health_eval::dsl::*;
     let next_earnings = earnings_date
         .map(|date_str: String| NaiveDate::parse_from_str(&date_str, "%b %d, %Y").unwrap());
+    let valid_next_earnings = next_earnings.filter(|&date| {
+        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(3)
+    });
     let new_entry: NewStockHealthEval<'_> = NewStockHealthEval::create_new_entry(
         exc,
         symbol,
         currency_str,
         industry_str,
-        next_earnings,
+        valid_next_earnings,
         price,
         next_yr_rev,
     )

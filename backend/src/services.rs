@@ -88,7 +88,7 @@ pub async fn update_earnings_all(
     db::insert_stock_data_batch(annual_entries, conn);
     db::update_growths(conn);
     db::update_ratios(conn);
-    db::fill_temp_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
+    db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
     db::update_estimate(
         &ticker,
@@ -113,23 +113,26 @@ pub async fn update_earnings_ttm(
     db::insert_stock_data_batch(ttm_entries, conn);
     db::update_growths(conn);
     db::update_ratios(conn);
-    db::fill_temp_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
+    db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
     Ok(())
 }
 
-pub async fn update_price(
+pub async fn update_regular(
     ticker: &str,
     exchange: &table::Exchange,
     conn: &mut PgConnection,
+    update_date: bool,
 ) -> Result<(), ScraperError> {
     let (earnings_date, price) = bullseye_api::scrape_regular_update(ticker, exchange).await?;
-    db::update_earnings_date(
-        ticker,
-        table::get_exchange_string(&exchange),
-        earnings_date,
-        conn,
-    );
+    if update_date {
+        db::update_earnings_date(
+            ticker,
+            table::get_exchange_string(&exchange),
+            earnings_date,
+            conn,
+        );
+    }
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
     Ok(())
 }

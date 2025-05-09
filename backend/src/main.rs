@@ -26,7 +26,7 @@ async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, Scr
         let earnings_update_needed = target
             .next_earnings_date()
             .map(|earnings_date| Local::now().date_naive() - earnings_date > Duration::days(3));
-        if let Some(true) | None = earnings_update_needed {
+        if let Some(true) = earnings_update_needed {
             let latest_earnings = db::StockData::latest_quarter_data(
                 &ticker,
                 table::get_exchange_string(&exchange),
@@ -41,8 +41,12 @@ async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, Scr
             let price_update_needed = target
                 .last_updated()
                 .map(|last_updated| last_updated < Local::now().date_naive());
+            let date_update_needed = target
+                .next_earnings_date()
+                .map(|earnings_date| Local::now().date_naive() - earnings_date > Duration::days(3));
+            let date_update_bool = date_update_needed.map_or(true, |b| b);
             if let Some(true) | None = price_update_needed {
-                services::update_price(&ticker, &exchange, conn).await?;
+                services::update_regular(&ticker, &exchange, conn, date_update_bool).await?;
             }
         }
     }
