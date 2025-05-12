@@ -1,18 +1,18 @@
 // use axum::http::StatusCode;
 use axum::{extract::Path, routing::get, Json, Router};
 use bullseye_api::table;
-use bullseye_api::table::FinancialStatement;
-use bullseye_api::{self, client::ScraperError};
 use chrono::{Duration, Local};
 use db::{StockData, StockHealthEval};
+use errors::BullsEyeError;
 // use http::Method;
 use serde::Deserialize;
 use tower_http::cors::{Any, CorsLayer};
 mod db;
+mod errors;
 mod schema;
 mod services;
 
-async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, ScraperError> {
+async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, BullsEyeError> {
     let exchange = match ticker.parse::<u64>() {
         Ok(_) => table::Exchange::TSE,
         Err(_) => table::Exchange::NASDAQ,
@@ -50,22 +50,11 @@ async fn search(Path(ticker): Path<String>) -> Result<Json<StockHealthEval>, Scr
             }
         }
     }
-    db::run_eval_prep(&ticker, table::get_exchange_string(&exchange), conn);
-    db::run_eval(&ticker, table::get_exchange_string(&exchange), conn);
+    db::run_eval_prep(&ticker, table::get_exchange_string(&exchange), conn)?;
+    db::run_eval(&ticker, table::get_exchange_string(&exchange), conn)?;
     let healtheval =
         db::StockHealthEval::search(&ticker, table::get_exchange_string(&exchange), conn);
     Ok(Json(healtheval))
-}
-
-async fn evaluate(Path(ticker): Path<String>) {
-    let exchange = match ticker.parse::<u64>() {
-        Ok(_) => table::Exchange::TSE,
-        Err(_) => table::Exchange::NASDAQ,
-    };
-    let conn = &mut db::establish_connection();
-    db::run_eval_prep(&ticker, table::get_exchange_string(&exchange), conn);
-    db::run_eval(&ticker, table::get_exchange_string(&exchange), conn);
-    println!("Completed!");
 }
 
 //Temporary-----------------------------------------
@@ -120,7 +109,6 @@ async fn main() {
         .route("/search/{ticker}", get(search))
         .route("/print", get(print_stock_data))
         .route("/printeval", get(print_eval_data))
-        .route("/evaluate/{ticker}", get(evaluate))
         .route("/simulate/{ticker}/{net_margin}/{growth}", get(simulate))
         .layer(cors);
 

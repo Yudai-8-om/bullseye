@@ -4,6 +4,7 @@ use bullseye_api::table::ConcatStatement;
 use chrono::{Duration, Local, NaiveDate};
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
+use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
 
 pub fn establish_connection() -> PgConnection {
@@ -496,7 +497,12 @@ impl StockHealthEval {
             Err(_) => false,
         }
     }
-    fn assess_basic_health(&self, target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+    fn assess_basic_health(
+        &self,
+        target_ticker: &str,
+        exc: &str,
+        conn: &mut PgConnection,
+    ) -> Result<(), DieselError> {
         use crate::schema::stock_data::dsl::*;
         use crate::schema::stock_health_eval::dsl::*;
         use crate::schema::{stock_data, stock_health_eval};
@@ -507,8 +513,8 @@ impl StockHealthEval {
             .filter(gross_margin.ne(0.))
             .order((year_str.desc(), quarter_str.desc()))
             .limit(1)
-            .first::<StockData>(conn)
-            .expect("Cannot load database. Failed to update StockHealth table"); //TODO: Fix here
+            .first::<StockData>(conn)?;
+        // .expect("Cannot load database. Failed to update StockHealth table"); //TODO: Fix here
         let curr_revenue = target.revenue();
         let curr_revenue_growth_yoy = target.revenue_growth_yoy();
         let curr_gross_profit_growth_yoy = target.gross_profit_growth_yoy();
@@ -599,6 +605,7 @@ impl StockHealthEval {
         ))
         .execute(conn)
         .expect("Failed to update table. Check connection");
+        Ok(())
     }
 
     fn assess_estimate(&self, target_ticker: &str, exc: &str, conn: &mut PgConnection) {
@@ -652,7 +659,12 @@ impl StockHealthEval {
         .execute(conn)
         .expect("Failed to update table. Check connection");
     }
-    fn calculate_trend(&self, target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+    fn calculate_trend(
+        &self,
+        target_ticker: &str,
+        exc: &str,
+        conn: &mut PgConnection,
+    ) -> Result<(), DieselError> {
         use crate::schema::stock_data::dsl::*;
         use crate::schema::stock_health_eval::dsl::*;
         use crate::schema::{stock_data, stock_health_eval};
@@ -662,8 +674,10 @@ impl StockHealthEval {
             .filter(duration.eq("T"))
             .order((year_str.desc(), quarter_str.desc()))
             .limit(8)
-            .load::<StockData>(conn)
-            .expect("Cannot load database. Failed to update StockHealth table");
+            .load::<StockData>(conn)?;
+        if target.len() < 8 {
+            return Ok(());
+        }
         let result_vec: Vec<Option<bool>> = target
             .iter()
             .take(4)
@@ -680,19 +694,19 @@ impl StockHealthEval {
         let result = concat_bool(result_vec);
 
         match result {
-            Some(_) => {
+            Some(val) => {
                 diesel::update(
                     stock_health_eval
                         .filter(stock_health_eval::ticker.eq(target_ticker))
                         .filter(stock_health_eval::exchange.eq(exc)),
                 )
-                .set((improving_gross_margin.eq(result),))
-                .execute(conn)
-                .expect("Failed to update table. Check connection");
+                .set((improving_gross_margin.eq(val),))
+                .execute(conn)?;
             }
 
             None => println!("Gross margin is not available for trend calculation."),
         }
+        Ok(())
     }
 
     fn calculate_multi_yr_rev_growth(
@@ -823,7 +837,11 @@ pub fn update_estimate(
     .expect("Failed to update table. Check connection");
 }
 
-pub fn run_eval_prep<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) {
+pub fn run_eval_prep<'a>(
+    symbol: &str,
+    exc: &str,
+    conn: &mut PgConnection,
+) -> Result<(), DieselError> {
     use crate::schema::stock_health_eval::dsl::*;
     let target: StockHealthEval = stock_health_eval
         .filter(ticker.eq(symbol))
@@ -832,19 +850,21 @@ pub fn run_eval_prep<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) {
         .expect("cannot load database");
     target.calculate_multi_yr_rev_growth(symbol, exc, conn);
     target.calculate_multi_yr_gp_growth(symbol, exc, conn);
-    target.calculate_trend(symbol, exc, conn);
+    target.calculate_trend(symbol, exc, conn)?;
+    Ok(())
 }
 
-pub fn run_eval<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) {
+pub fn run_eval<'a>(symbol: &str, exc: &str, conn: &mut PgConnection) -> Result<(), DieselError> {
     let target = StockHealthEval::search(symbol, exc, conn);
     // let target: StockHealthEval = stock_health_eval
     //     .filter(ticker.eq(symbol))
     //     .filter(exchange.eq(exc))
     //     .first::<StockHealthEval>(conn)
     //     .expect("cannot load database");
-    target.assess_basic_health(symbol, exc, conn);
+    target.assess_basic_health(symbol, exc, conn)?;
     let reloaded_target = StockHealthEval::search(symbol, exc, conn);
     reloaded_target.assess_estimate(symbol, exc, conn);
+    Ok(())
 }
 
 pub fn run_sim<'a>(

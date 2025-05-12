@@ -1,6 +1,6 @@
 use crate::db;
+use crate::errors::BullsEyeError;
 use bullseye_api::table;
-use bullseye_api::{self, client::ScraperError};
 // use chrono::{Duration, Local};
 use db::NewStockEntry;
 use diesel::pg::PgConnection;
@@ -16,12 +16,12 @@ use diesel::pg::PgConnection;
 /// # Returns
 ///
 /// * `Ok(())` if the operation was successful.
-/// * `Err(ScraperError)` if an error occurred during scraping or database insertion.
+/// * `Err(BullsEyeError)` if an error occurred during scraping or database insertion.
 pub async fn handle_new_ticker(
     new_ticker: &str,
     exchange: &table::Exchange,
     conn: &mut PgConnection,
-) -> Result<(), ScraperError> {
+) -> Result<(), BullsEyeError> {
     let (
         concat_statement_ttm,
         concat_statement_annual,
@@ -68,13 +68,13 @@ pub async fn handle_new_ticker(
 /// # Returns
 ///
 /// * `Ok(())` if the operation was successful.
-/// * `Err(ScraperError)` if an error occurred during scraping or database insertion.
+/// * `Err(BullsEyeError)` if an error occurred during scraping or database insertion.
 pub async fn update_earnings_all(
     ticker: &str,
     exchange: &table::Exchange,
     conn: &mut PgConnection,
-) -> Result<(), ScraperError> {
-    let (concat_statement_ttm, concat_statement_annual, earnings_date, price, next_yr_rev) =
+) -> Result<(), BullsEyeError> {
+    let (concat_statement_ttm, concat_statement_annual, _, price, next_yr_rev) =
         bullseye_api::scrape_annual_update(ticker, exchange).await?;
     let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
         .into_iter()
@@ -103,8 +103,8 @@ pub async fn update_earnings_ttm(
     ticker: &str,
     exchange: &table::Exchange,
     conn: &mut PgConnection,
-) -> Result<(), ScraperError> {
-    let (concat_statement_ttm, earnings_date, price) =
+) -> Result<(), BullsEyeError> {
+    let (concat_statement_ttm, _, price) =
         bullseye_api::scrape_quarter_update(ticker, exchange).await?;
     let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
         .into_iter()
@@ -123,7 +123,7 @@ pub async fn update_regular(
     exchange: &table::Exchange,
     conn: &mut PgConnection,
     update_date: bool,
-) -> Result<(), ScraperError> {
+) -> Result<(), BullsEyeError> {
     let (earnings_date, price) = bullseye_api::scrape_regular_update(ticker, exchange).await?;
     if update_date {
         db::update_earnings_date(
