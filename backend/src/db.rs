@@ -631,14 +631,6 @@ impl StockHealthEval {
     ) -> Result<(), DieselError> {
         use crate::schema::stock_health_eval::dsl::*;
         let target = StockData::latest_annual_data(target_ticker, target_exchange, conn)?;
-        // stock_data // assuming gross margin is not empty
-        //     .filter(stock_data::ticker.eq(target_ticker))
-        //     .filter(stock_data::exchange.eq(target_exchange))
-        //     .filter(duration.eq("Y"))
-        //     .order((year_str.desc(), quarter_str.desc()))
-        //     .limit(1)
-        //     .first::<StockData>(conn)
-        //     .expect("Cannot load database. Failed to update StockHealth table");
         let curr_rev = target.revenue();
         let next_yr_rev = self.revenue_next_year();
         let next_yr_rev_growth =
@@ -697,129 +689,119 @@ impl StockHealthEval {
     fn calculate_multi_yr_rev_growth(
         &self,
         target_ticker: &str,
-        exc: &str,
+        target_exchange: &str,
         conn: &mut PgConnection,
-    ) {
-        use crate::schema::stock_data::dsl::*;
+    ) -> Result<(), DieselError> {
         use crate::schema::stock_health_eval::dsl::*;
-        use crate::schema::{stock_data, stock_health_eval};
-        let target = stock_data
-            .filter(stock_data::ticker.eq(target_ticker))
-            .filter(stock_data::exchange.eq(exc))
-            .filter(duration.eq("Y"))
-            .filter(revenue_growth_yoy.ne(0.))
-            .order(year_str.desc())
-            .limit(4)
-            .load::<StockData>(conn)
-            .expect("Cannot load database. Failed to update StockHealth table");
-        let rev_growth: Vec<f64> = target.iter().map(|i| i.revenue_growth_yoy()).collect();
-        let rev_growth_ave = rev_growth.iter().sum::<f64>() / rev_growth.len() as f64;
-        diesel::update(
-            stock_health_eval
-                .filter(stock_health_eval::ticker.eq(target_ticker))
-                .filter(stock_health_eval::exchange.eq(exc)),
-        )
-        .set(revenue_growth_multi_year.eq(rev_growth_ave))
-        .execute(conn)
-        .expect("Failed to update table. Check connection");
+        let target = query::load_multiple_earnings_annual(target_ticker, target_exchange, 4, conn)?;
+        let rev_growth = extract_field(&target, |data| data.revenue_growth_yoy());
+        let rev_growth_ave = calculate::calculate_average_growth(rev_growth);
+        query::update_eval_table(
+            target_ticker,
+            target_exchange,
+            revenue_growth_multi_year.eq(rev_growth_ave),
+            conn,
+        )?;
+        Ok(())
     }
 
     fn calculate_multi_yr_gp_growth(
         &self,
         target_ticker: &str,
-        exc: &str,
+        target_exchange: &str,
         conn: &mut PgConnection,
-    ) {
+    ) -> Result<(), DieselError> {
         use crate::schema::stock_data::dsl::*;
         use crate::schema::stock_health_eval::dsl::*;
-        use crate::schema::{stock_data, stock_health_eval};
-        let target = stock_data
-            .filter(stock_data::ticker.eq(target_ticker))
-            .filter(stock_data::exchange.eq(exc))
-            .filter(duration.eq("Y"))
-            .filter(gross_profit_growth_yoy.ne(0.))
-            .order(year_str.desc())
-            .limit(4)
-            .load::<StockData>(conn)
-            .expect("Cannot load database. Failed to update StockHealth table");
+        let target = query::load_multiple_earnings_annual_filter(
+            target_ticker,
+            target_exchange,
+            |q| q.filter(gross_profit_growth_yoy.ne(0.)),
+            4,
+            conn,
+        )?;
         let gp_growth: Vec<f64> = target
             .iter()
             .filter_map(|i| i.gross_profit_growth_yoy())
             .collect();
-        let gp_growth_ave = gp_growth.iter().sum::<f64>() / gp_growth.len() as f64;
-        diesel::update(
-            stock_health_eval
-                .filter(stock_health_eval::ticker.eq(target_ticker))
-                .filter(stock_health_eval::exchange.eq(exc)),
-        )
-        .set(gross_profit_growth_multi_year.eq(gp_growth_ave))
-        .execute(conn)
-        .expect("Failed to update table. Check connection");
+        let gp_growth_ave = calculate::calculate_average_growth(gp_growth);
+        query::update_eval_table(
+            target_ticker,
+            target_exchange,
+            gross_profit_growth_multi_year.eq(gp_growth_ave),
+            conn,
+        )?;
+        Ok(())
     }
 }
 
 pub fn update_earnings_date(
     target_ticker: &str,
-    exc: &str,
+    target_exchange: &str,
     earnings_date: Option<String>,
     conn: &mut PgConnection,
-) {
+) -> Result<(), DieselError> {
     use crate::schema::stock_health_eval::dsl::*;
     let next_earnings =
         earnings_date.map(|date_str| NaiveDate::parse_from_str(&date_str, "%b %d, %Y").unwrap());
     let valid_next_earnings = next_earnings.filter(|&date| {
         date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(3)
     });
-    diesel::update(
-        stock_health_eval
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(exc)),
-    )
-    .set(next_earnings_date.eq(valid_next_earnings))
-    .execute(conn)
-    .expect("Failed to update table. Check connection");
+    query::update_eval_table(
+        target_ticker,
+        target_exchange,
+        next_earnings_date.eq(valid_next_earnings),
+        conn,
+    )?;
+    Ok(())
 }
-pub fn empty_earnings_date(target_ticker: &str, exc: &str, conn: &mut PgConnection) {
+pub fn empty_earnings_date(
+    target_ticker: &str,
+    target_exchange: &str,
+    conn: &mut PgConnection,
+) -> Result<(), DieselError> {
     use crate::schema::stock_health_eval::dsl::*;
-    diesel::update(
-        stock_health_eval
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(exc)),
-    )
-    .set(next_earnings_date.eq::<Option<NaiveDate>>(None))
-    .execute(conn)
-    .expect("Failed to update table. Check connection");
+    query::update_eval_table(
+        target_ticker,
+        target_exchange,
+        next_earnings_date.eq::<Option<NaiveDate>>(None),
+        conn,
+    )?;
+    Ok(())
 }
 
-pub fn update_price(target_ticker: &str, exc: &str, price: Option<f64>, conn: &mut PgConnection) {
+pub fn update_price(
+    target_ticker: &str,
+    target_exchange: &str,
+    price: Option<f64>,
+    conn: &mut PgConnection,
+) -> Result<(), DieselError> {
     use crate::schema::stock_health_eval::dsl::*;
-    diesel::update(
-        stock_health_eval
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(exc)),
-    )
-    .set((
-        latest_price.eq(price),
-        last_updated.eq(Local::now().date_naive()),
-    ))
-    .execute(conn)
-    .expect("Failed to update table. Check connection");
+    query::update_eval_table(
+        target_ticker,
+        target_exchange,
+        (
+            latest_price.eq(price),
+            last_updated.eq(Local::now().date_naive()),
+        ),
+        conn,
+    )?;
+    Ok(())
 }
 pub fn update_estimate(
     target_ticker: &str,
-    exc: &str,
+    target_exchange: &str,
     next_yr_rev: Option<f64>,
     conn: &mut PgConnection,
-) {
+) -> Result<(), DieselError> {
     use crate::schema::stock_health_eval::dsl::*;
-    diesel::update(
-        stock_health_eval
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(exc)),
-    )
-    .set((revenue_next_year.eq(next_yr_rev),))
-    .execute(conn)
-    .expect("Failed to update table. Check connection");
+    query::update_eval_table(
+        target_ticker,
+        target_exchange,
+        revenue_next_year.eq(next_yr_rev),
+        conn,
+    )?;
+    Ok(())
 }
 
 pub fn run_eval_prep<'a>(
@@ -833,8 +815,8 @@ pub fn run_eval_prep<'a>(
         .filter(exchange.eq(exc))
         .first::<StockHealthEval>(conn)
         .expect("cannot load database");
-    target.calculate_multi_yr_rev_growth(symbol, exc, conn);
-    target.calculate_multi_yr_gp_growth(symbol, exc, conn);
+    target.calculate_multi_yr_rev_growth(symbol, exc, conn)?;
+    target.calculate_multi_yr_gp_growth(symbol, exc, conn)?;
     target.update_trend(symbol, exc, conn)?;
     Ok(())
 }

@@ -48,23 +48,44 @@ pub fn load_multiple_earnings_ttm(
     )
 }
 
-// pub fn load_multiple_earnings_annual(
-//     target_ticker: &str,
-//     target_exchange: &str,
-//     num_row: i64,
-//     conn: &mut PgConnection,
-// ) -> Result<Vec<StockData>, DieselError> {
-//     use crate::schema::stock_data::dsl::*;
-//     load_table(
-//         stock_data
-//             .filter(ticker.eq(target_ticker))
-//             .filter(exchange.eq(target_exchange))
-//             .filter(duration.eq("Y"))
-//             .order(year_str.desc()),
-//         num_row,
-//         conn,
-//     )
-// }
+pub fn load_multiple_earnings_annual(
+    target_ticker: &str,
+    target_exchange: &str,
+    num_row: i64,
+    conn: &mut PgConnection,
+) -> Result<Vec<StockData>, DieselError> {
+    use crate::schema::stock_data::dsl::*;
+    load_table(
+        stock_data
+            .filter(ticker.eq(target_ticker))
+            .filter(exchange.eq(target_exchange))
+            .filter(duration.eq("Y"))
+            .order(year_str.desc()),
+        num_row,
+        conn,
+    )
+}
+
+pub fn load_multiple_earnings_annual_filter<'a, F>(
+    target_ticker: &'a str,
+    target_exchange: &'a str,
+    additional_filter: F,
+    num_row: i64,
+    conn: &mut PgConnection,
+) -> Result<Vec<StockData>, DieselError>
+where
+    F: FnOnce(stock_data::BoxedQuery<'a, Pg>) -> stock_data::BoxedQuery<'a, Pg>,
+{
+    use crate::schema::stock_data::dsl::*;
+    let base_query = stock_data
+        .filter(ticker.eq(target_ticker))
+        .filter(exchange.eq(target_exchange))
+        .filter(duration.eq("Y"))
+        .order(year_str.desc())
+        .into_boxed();
+    let query = additional_filter(base_query);
+    load_table(query, num_row, conn)
+}
 
 fn update_table<T, U>(table: T, updates: U, conn: &mut PgConnection) -> Result<usize, DieselError>
 where

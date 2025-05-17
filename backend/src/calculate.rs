@@ -19,7 +19,9 @@ pub fn calculate_yoy_growth(curr_val: f64, prev_val: f64) -> f64 {
     growth
 }
 
-// fn calculate_average_growth(growth_vec: Vec<f64>)
+pub fn calculate_average_growth(growth_vec: Vec<f64>) -> f64 {
+    growth_vec.iter().sum::<f64>() / growth_vec.len() as f64
+}
 
 #[derive(PartialEq)]
 pub enum Trend {
