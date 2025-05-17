@@ -14,7 +14,9 @@ diesel = { version = "2", features = [
     "postgres",
     "64-column-tables",
     "chrono",
+    "r2d2",
 ] }
+tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
 thiserror = "2"
 http = "1"

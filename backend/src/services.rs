@@ -41,7 +41,7 @@ pub async fn handle_new_ticker(
         .collect();
     db::insert_stock_data_batch(ttm_entries, conn);
     db::insert_stock_data_batch(annual_entries, conn);
-    db::update_growths(conn);
+    db::update_growths(conn)?;
     db::update_ratios(conn);
     db::add_new_eval(
         new_ticker,
@@ -86,7 +86,7 @@ pub async fn update_earnings_all(
         .collect();
     db::insert_stock_data_batch(ttm_entries, conn);
     db::insert_stock_data_batch(annual_entries, conn);
-    db::update_growths(conn);
+    db::update_growths(conn)?;
     db::update_ratios(conn);
     db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);
@@ -111,7 +111,7 @@ pub async fn update_earnings_ttm(
         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
         .collect();
     db::insert_stock_data_batch(ttm_entries, conn);
-    db::update_growths(conn);
+    db::update_growths(conn)?;
     db::update_ratios(conn);
     db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn);
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn);

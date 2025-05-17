@@ -10,6 +10,8 @@ pub enum BullsEyeError {
     ScraperError(#[from] ScraperError),
     #[error(transparent)]
     DatabaseError(#[from] diesel::result::Error),
+    #[error("Database pooling connection error")]
+    DbPoolError,
 }
 
 impl IntoResponse for BullsEyeError {
@@ -22,7 +24,9 @@ impl IntoResponse for BullsEyeError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             BullsEyeError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            BullsEyeError::DbPoolError => StatusCode::INTERNAL_SERVER_ERROR,
         };
+
         (status, self.to_string()).into_response()
     }
 }
