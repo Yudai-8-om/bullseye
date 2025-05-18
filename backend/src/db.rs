@@ -202,43 +202,28 @@ impl StockData {
         prev_year
     }
 
-    fn calculate_ratio(&self, conn: &mut PgConnection) {
+    fn update_ratios(&self, conn: &mut PgConnection) -> Result<(), DieselError> {
         use crate::schema::stock_data::dsl::*;
         let curr_id = self.id;
-        let sga_ratio = match self.gross_profit() {
-            Some(0.) | None => None,
-            Some(gp) => match self.sga_expenses() {
-                Some(sga) => Some((sga / gp * 100.).round() / 100.),
-                None => Some(0.),
-            },
-        };
-        let rnd_ratio = match self.gross_profit() {
-            Some(0.) | None => None,
-            Some(gp) => match self.rnd_expenses() {
-                Some(sga) => Some((sga / gp * 100.).round() / 100.),
-                None => Some(0.),
-            },
-        };
-        let interest_ratio = match self.operating_income() {
-            0. => None,
-            _ => match self.interest_expenses() {
-                Some(val) => Some((val / self.operating_income() * 100.).round() / 100.),
-                None => None,
-            },
-        };
-        let ratio_result: Result<usize, diesel::result::Error> =
-            diesel::update(stock_data.filter(id.eq(curr_id)))
-                .set((
-                    sga_gp_ratio.eq(sga_ratio),
-                    rnd_gp_ratio.eq(rnd_ratio),
-                    interest_expenses_op_income_ratio.eq(interest_ratio),
-                    ratio_calculated.eq(true),
-                ))
-                .execute(conn);
-        match ratio_result {
-            Ok(_) => println!("Ratio updated successfully"),
-            Err(e) => println!("Error calculating growth due to {e}"),
-        }
+        let sga_ratio = self
+            .gross_profit()
+            .map(|gp| calculate::calculate_ratio(self.sga_expenses(), gp))
+            .flatten();
+        let rnd_ratio = self
+            .gross_profit()
+            .map(|gp| calculate::calculate_ratio(self.rnd_expenses(), gp))
+            .flatten();
+        let interest_ratio =
+            calculate::calculate_ratio(self.interest_expenses(), self.operating_income());
+        diesel::update(stock_data.filter(id.eq(curr_id)))
+            .set((
+                sga_gp_ratio.eq(sga_ratio),
+                rnd_gp_ratio.eq(rnd_ratio),
+                interest_expenses_op_income_ratio.eq(interest_ratio),
+                ratio_calculated.eq(true),
+            ))
+            .execute(conn)?;
+        Ok(())
     }
     fn update_yoy_gp_growth(&self, conn: &mut PgConnection) -> Result<(), DieselError> {
         use crate::schema::stock_data::dsl::*;
@@ -281,15 +266,15 @@ where
     data.iter().map(f).collect()
 }
 
-pub fn update_ratios(conn: &mut PgConnection) {
+pub fn update_ratios_batch(conn: &mut PgConnection) -> Result<(), DieselError> {
     use crate::schema::stock_data::dsl::*;
     let target: Vec<StockData> = stock_data
         .filter(ratio_calculated.eq(false))
-        .load::<StockData>(conn)
-        .expect("cannot load database");
+        .load::<StockData>(conn)?;
     for i in target {
-        i.calculate_ratio(conn);
+        i.update_ratios(conn)?;
     }
+    Ok(())
 }
 
 pub fn update_growths(conn: &mut PgConnection) -> Result<(), DieselError> {

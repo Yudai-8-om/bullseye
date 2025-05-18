@@ -102,3 +102,10 @@ pub fn analyze_trend(trend_vec: Vec<Trend>, count_threshold: usize) -> (bool, bo
         downtrend >= count_threshold && downtrend > uptrend,
     )
 }
+
+pub fn calculate_ratio(value: Option<f64>, total: f64) -> Option<f64> {
+    if total <= 0. {
+        return None;
+    }
+    value.map(|val| (val / total * 100.).round() / 100.)
+}
