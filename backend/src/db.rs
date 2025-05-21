@@ -84,6 +84,7 @@ pub struct StockData {
     ratio_calculated: bool,
     growth_calculated: bool,
 }
+
 impl StockData {
     pub fn quarter(&self) -> i16 {
         self.quarter_str
@@ -547,7 +548,7 @@ impl StockHealthEval {
         let is_sga_light = metrics::is_sga_light(&target);
         let has_low_interest_expense = metrics::has_low_interest_expense(&target);
         let is_active_share_buyback = metrics::is_active_share_buyback(&target);
-        let is_share_diluted = metrics::is_share_diluted(&target);
+        // let is_share_diluted = metrics::is_share_diluted(&target);
         let has_healthy_cash_position = metrics::has_healthy_cash_position(&target);
         let is_room_for_buyback = metrics::is_room_for_buyback(&target);
         let industry_name = self.industry();
@@ -730,7 +731,7 @@ pub fn update_earnings_date(
     let next_earnings =
         earnings_date.map(|date_str| NaiveDate::parse_from_str(&date_str, "%b %d, %Y").unwrap());
     let valid_next_earnings = next_earnings.filter(|&date| {
-        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(3)
+        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(1)
     });
     query::update_eval_table(
         target_ticker,
@@ -978,7 +979,7 @@ pub async fn add_new_eval<'a>(
     let next_earnings = earnings_date
         .map(|date_str: String| NaiveDate::parse_from_str(&date_str, "%b %d, %Y").unwrap());
     let valid_next_earnings = next_earnings.filter(|&date| {
-        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(3)
+        date >= Local::now().date_naive() || Local::now().date_naive() - date <= Duration::days(1)
     });
     let new_entry: NewStockHealthEval<'_> = NewStockHealthEval::create_new_entry(
         exc,
@@ -999,34 +1000,15 @@ pub async fn add_new_eval<'a>(
         .expect("Failed to insert new entry into stock health eval table");
 }
 
-pub fn insert_stock_data_batch(stock_entries: Vec<NewStockEntry>, conn: &mut PgConnection) {
+pub fn insert_stock_data_batch(
+    stock_entries: Vec<NewStockEntry>,
+    conn: &mut PgConnection,
+) -> Result<bool, DieselError> {
     use crate::schema::stock_data::dsl::*;
-    diesel::insert_into(stock_data)
+    let update_count = diesel::insert_into(stock_data)
         .values(&stock_entries)
         .on_conflict((exchange, ticker, duration, quarter_str, year_str))
         .do_nothing()
-        .execute(conn)
-        .expect("Failed to insert new entry into stock data table");
+        .execute(conn)?;
+    Ok(update_count > 0)
 }
-
-// pub fn load_stock_data(conn: &mut PgConnection) -> Vec<StockData> {
-//     use crate::schema::stock_data::dsl::*;
-//     let result = stock_data
-//         .limit(10)
-//         // .select((ticker))
-//         .select(StockData::as_select())
-//         .load(conn)
-//         .expect("Error loading data");
-//     result
-// }
-
-// pub fn load_health_data(conn: &mut PgConnection) -> Vec<StockHealthEval> {
-//     use crate::schema::stock_health_eval::dsl::*;
-//     let result = stock_health_eval
-//         .limit(10)
-//         // .select((ticker))
-//         .select(StockHealthEval::as_select())
-//         .load(conn)
-//         .expect("Error loading data");
-//     result
-// }

@@ -2,9 +2,9 @@ use crate::calculate;
 use crate::db;
 use crate::db::StockData;
 
-pub fn is_share_diluted(stock_data: &StockData) -> bool {
-    stock_data.shares_change_yoy() > 3.
-}
+// pub fn is_share_diluted(stock_data: &StockData) -> bool {
+//     stock_data.shares_change_yoy() > 3.
+// }
 pub fn is_active_share_buyback(stock_data: &StockData) -> bool {
     stock_data.shares_change_yoy() < 0.
 }

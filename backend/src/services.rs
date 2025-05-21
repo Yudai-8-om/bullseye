@@ -39,8 +39,8 @@ pub async fn handle_new_ticker(
         .into_iter()
         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
         .collect();
-    db::insert_stock_data_batch(ttm_entries, conn);
-    db::insert_stock_data_batch(annual_entries, conn);
+    db::insert_stock_data_batch(ttm_entries, conn)?;
+    db::insert_stock_data_batch(annual_entries, conn)?;
     db::update_growths(conn)?;
     db::update_ratios_batch(conn)?;
     db::add_new_eval(
@@ -57,7 +57,7 @@ pub async fn handle_new_ticker(
     Ok(())
 }
 
-/// This function update data upon earnings and price changes.
+/// This function updates data upon earnings and price changes.
 ///
 /// # Arguments
 ///
@@ -84,18 +84,20 @@ pub async fn update_earnings_all(
         .into_iter()
         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
         .collect();
-    db::insert_stock_data_batch(ttm_entries, conn);
-    db::insert_stock_data_batch(annual_entries, conn);
-    db::update_growths(conn)?;
-    db::update_ratios_batch(conn)?;
-    db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
+    let is_ttm_entries_existed = db::insert_stock_data_batch(ttm_entries, conn)?;
+    let is_annual_entries_existed = db::insert_stock_data_batch(annual_entries, conn)?;
+    if is_ttm_entries_existed && is_annual_entries_existed {
+        db::update_growths(conn)?;
+        db::update_ratios_batch(conn)?;
+        db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
+        db::update_estimate(
+            &ticker,
+            table::get_exchange_string(&exchange),
+            next_yr_rev,
+            conn,
+        )?;
+    }
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn)?;
-    db::update_estimate(
-        &ticker,
-        table::get_exchange_string(&exchange),
-        next_yr_rev,
-        conn,
-    )?;
     Ok(())
 }
 
@@ -110,10 +112,12 @@ pub async fn update_earnings_ttm(
         .into_iter()
         .filter_map(|x| db::NewStockEntry::add_new_entry(x))
         .collect();
-    db::insert_stock_data_batch(ttm_entries, conn);
-    db::update_growths(conn)?;
-    db::update_ratios_batch(conn)?;
-    db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
+    let is_entries_existed = db::insert_stock_data_batch(ttm_entries, conn)?;
+    if is_entries_existed {
+        db::update_growths(conn)?;
+        db::update_ratios_batch(conn)?;
+        db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
+    }
     db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn)?;
     Ok(())
 }
