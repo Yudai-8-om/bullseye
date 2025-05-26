@@ -1,13 +1,11 @@
 import { bullseyeAPI } from "../api/bullseyeAPI";
-import { StockData } from "../api/stockData";
 import { StockHealthEval } from "../api/stockHealthEval";
-import { useEffect, useState, useRef } from "react";
+import { useState } from "react";
 import SearchBar from "./SearchBar";
 import { HeartIcon } from "@heroicons/react/24/outline";
 
 function SingleTickerPage() {
   const [healthEval, updateEvals] = useState<StockHealthEval>();
-  const [earnings, updateEarnings] = useState<StockData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   //   const [ticker, getTicker] = useState("");
@@ -37,25 +35,6 @@ function SingleTickerPage() {
     const vals = targets.filter((val) => val !== undefined);
     return vals.length > 0 ? Math.min(...vals).toFixed(2) : undefined;
   }
-  //   useEffect(() => {
-  //     async function loadEarnings() {
-  //       setLoading(true);
-  //       try {
-  //         const earnings_data = await bullseyeAPI.get();
-  //         console.log(JSON.stringify(earnings_data, null, 2));
-  //         updateEarnings(earnings_data);
-  //       } catch (e) {
-  //         if (e instanceof Error) {
-  //           setError(e.message);
-  //         } else {
-  //           console.log("Unexpected Error: ", e);
-  //         }
-  //       } finally {
-  //         setLoading(false);
-  //       }
-  //     }
-  //     loadEarnings();
-  //   }, []);
 
   return (
     <>

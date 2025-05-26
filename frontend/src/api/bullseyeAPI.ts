@@ -1,4 +1,4 @@
-const baseUrl = "http://localhost:3000";
+export const baseUrl = "http://localhost:3000";
 
 function translateStatusToMessage(status: number) {
   switch (status) {
