@@ -1,8 +1,9 @@
 import { NominalMetrics } from "../api/nominalMetrics";
 import { HeartIcon } from "@heroicons/react/24/outline";
+import RevenueWidget from "./NominalEarningsWidget";
 
 interface MetricsPageProps {
-  nominalMetrics: NominalMetrics | undefined;
+  nominalMetrics: NominalMetrics;
   loading: boolean;
   error: string | undefined;
 }
@@ -17,7 +18,7 @@ function TickerMetricsPage(props: MetricsPageProps) {
     return vals.length > 0 ? Math.min(...vals).toFixed(2) : undefined;
   }
   return (
-    <>
+    <div>
       {error && (
         <div className="bg-red-400">
           <div className="card large error">
@@ -37,17 +38,17 @@ function TickerMetricsPage(props: MetricsPageProps) {
         </div>
       )}
       {!loading && !error && (
-        <>
-          <div>
-            <div className="flex items-center p-3">
-              <HeartIcon className="h-8 w-8 text-red-400"></HeartIcon>
+        <div className="px-4 sm:px-5 lg:px-6 py-6 w-full max-w-9xl mx-auto">
+          <div className="rounded-xl bg-white gap">
+            <div className="flex items-center p-4">
+              <HeartIcon className="h-8 w-8 text-red-400 m-1"></HeartIcon>
               <h1 className="text-4xl font-bold">
                 {nominalMetrics?.ticker.toLocaleUpperCase()}
               </h1>
             </div>
           </div>
           <div className="grid grid-cols-2 p-4">
-            <div>
+            <div className="col-span-2 lg:col-span-1 px-2">
               <h2 className="font-bold">Basic Information</h2>
               <div className="p-2 space-y-2.5 flex flex-col">
                 <p>
@@ -59,53 +60,8 @@ function TickerMetricsPage(props: MetricsPageProps) {
 
                   {nominalMetrics?.nextEarningsDate?.toString() ?? "-"}
                 </p>
-                <p>
-                  <span className="font-bold">Revenue (TTM): </span>
-                  {nominalMetrics?.currency}
-                  {nominalMetrics?.revenueTtm ?? "-"}
-                </p>
-                <p>
-                  <span className="font-bold">Revenue Growth YoY (TTM): </span>{" "}
-                  {nominalMetrics?.revenueGrowthYoyTtm?.toFixed(2) ?? "-"}%
-                </p>
-                <p>
-                  <span className="font-bold">
-                    Gross Profit Growth YoY (TTM):{" "}
-                  </span>{" "}
-                  {nominalMetrics?.grossProfitGrowthYoyTtm?.toFixed(2) ?? "-"}%
-                </p>
-                {/* <p>
-                  <span className="font-bold">
-                    Revenue Growth YoY 4yr Average:{" "}
-                  </span>{" "}
-                  {nominalMetrics?.revenueGrowthMultiYear?.toFixed(2) ?? "-"}%
-                </p>
-                <p>
-                  <span className="font-bold">
-                    Gross Profit Growth YoY 4yr Average:{" "}
-                  </span>{" "}
-                  {nominalMetrics?.grossProfitGrowthMultiYear?.toFixed(2) ??
-                    "-"}
-                  %
-                </p> */}
-                <p>
-                  <span className="font-bold">Gross Margin (TTM): </span>
-                  {nominalMetrics?.grossMarginTtm?.toFixed(2) ?? "-"}%
-                </p>
-                <p>
-                  <span className="font-bold">
-                    Selling, General & Admin Ratio (TTM):{" "}
-                  </span>
-                  {nominalMetrics?.sgaRatioTtm?.toFixed(2) ?? "-"}
-                </p>
-                <p>
-                  <span className="font-bold">R&D Ratio (TTM): </span>
-                  {nominalMetrics?.rndRatioTtm?.toFixed(2) ?? "-"}
-                </p>
-                <p>
-                  <span className="font-bold">Operating Margin (TTM): </span>
-                  {nominalMetrics?.operatingMarginTtm?.toFixed(2) ?? "-"}%
-                </p>
+                <RevenueWidget nominalMetrics={nominalMetrics} />
+
                 <p>
                   <span className="font-bold">Net Margin (TTM): </span>
                   {nominalMetrics?.netMarginTtm?.toFixed(2) ?? "-"}%
@@ -116,21 +72,13 @@ function TickerMetricsPage(props: MetricsPageProps) {
                 </p>
                 <p>
                   <span className="font-bold">
-                    Operating Cash Flow Margin (TTM):{" "}
-                  </span>
-                  {nominalMetrics?.operatingCashFlowMarginTtm?.toFixed(2) ??
-                    "-"}
-                  %
-                </p>
-                <p>
-                  <span className="font-bold">
                     Free Cash Flow Margin (TTM):{" "}
                   </span>
                   {nominalMetrics?.freeCashFlowMarginTtm?.toFixed(2) ?? "-"}%
                 </p>
               </div>
             </div>
-            <div>
+            <div className="col-span-2 lg:col-span-1 px-2">
               <h2 className="font-bold">Current Stock Price</h2>
               <div className="flex items-center p-5">
                 <h1 className="text-5xl font-bold p-6">
@@ -212,7 +160,7 @@ function TickerMetricsPage(props: MetricsPageProps) {
             </div>
           </div>
           <div className="grid grid-cols-2 p-4">
-            <div className="">
+            <div className="col-span-2 lg:col-span-1 px-2">
               <h2 className="font-bold">Reasons to buy</h2>
               <ul className="space-y-2.5">
                 {nominalMetrics?.grossMarginLongTermTrend == "Uptrend" &&
@@ -238,7 +186,7 @@ function TickerMetricsPage(props: MetricsPageProps) {
                   )}
               </ul>
             </div>
-            <div className="p-4">
+            <div className="col-span-2 lg:col-span-1 px-2">
               <h2 className="font-bold">Reasons to avoid</h2>
               <ul className="space-y-2.5">
                 {(nominalMetrics?.grossMarginLongTermTrend == "Downtrend" ||
@@ -266,9 +214,9 @@ function TickerMetricsPage(props: MetricsPageProps) {
               </ul>
             </div>
           </div>
-        </>
+        </div>
       )}
-    </>
+    </div>
   );
 }
 export default TickerMetricsPage;

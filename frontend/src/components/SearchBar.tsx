@@ -18,13 +18,13 @@ function SearchBar({ onSearch }: SearchBarProps) {
   return (
     <header className="bg-green-400 py-4 h-20 flex items-center justify-around">
       <div className="font-bold text-2xl">BullsEye</div>
-      <div>
+      <div className="bg-white rounded-xl border border-black">
         <form onSubmit={handleSubmit}>
           <input
             type="text"
             name="ticker"
             value={searchTerm}
-            placeholder="Search"
+            placeholder="Search Ticker"
             onChange={handleInput}
             className="ps-3"
           />

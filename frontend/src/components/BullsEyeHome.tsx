@@ -24,18 +24,17 @@ function BullsEyeHome() {
   }
 
   return (
-    <>
-      <header>
-        <SearchBar onSearch={(ticker) => loadMetrics(ticker)} />
-      </header>
-      {ticker && (
+    <div className="flex flex-col w-full">
+      <SearchBar onSearch={(ticker) => loadMetrics(ticker)} />
+
+      {ticker && nominalMetrics && (
         <TickerMetricsPage
           nominalMetrics={nominalMetrics}
           loading={loading}
           error={error}
         />
       )}
-    </>
+    </div>
   );
 }
 export default BullsEyeHome;
