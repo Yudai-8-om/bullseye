@@ -1,4 +1,3 @@
-// use crate::db_operations;
 use crate::db;
 use crate::errors::BullsEyeError;
 use crate::models::companies_model::{Company, NewCompany};
@@ -34,27 +33,6 @@ pub async fn get_company(
         Ok(new_company)
     }
 }
-
-// pub async fn handle_new_ticker(
-//     company_id: i32,
-//     new_ticker: &str,
-//     exchange: &Exchange,
-//     conn: &mut PgConnection,
-// ) -> Result<(), BullsEyeError> {
-//     let (earnings_enum_ttm, earnings_enum_annual, currency, earnings_date, price, next_yr_rev) =
-//         bullseye_api::scrape_init(new_ticker, exchange).await?;
-//     let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
-//     let annual_entries =
-//         NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_annual);
-//     earnings_model::insert_earnings_report_batch(ttm_entries, conn)?;
-//     earnings_model::insert_earnings_report_batch(annual_entries, conn)?;
-//     db::update_growths_batch(conn)?;
-//     db::update_ratios_batch(conn)?;
-//     db::update_earnings_date(company_id, earnings_date, conn)?;
-//     db::update_price(company_id, price, conn)?;
-//     db::update_estimate(company_id, next_yr_rev, conn)?;
-//     Ok(())
-// }
 
 /// runs after Q4 Earnings or for the initial update.
 /// includes:
@@ -99,7 +77,6 @@ pub async fn update_earnings_ttm(
 ) -> Result<(), BullsEyeError> {
     let (earnings_enum_ttm, currency, earnings_date, price, next_yr_rev) =
         bullseye_api::scrape_quarter_update(ticker, exchange).await?;
-    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
     let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
     let is_entries_existed = earnings_model::insert_earnings_report_batch(ttm_entries, conn)?;
     if is_entries_existed {
@@ -118,14 +95,10 @@ pub async fn update_regular(
     ticker: &str,
     exchange: &Exchange,
     conn: &mut PgConnection,
-    // update_date: bool,
 ) -> Result<(), BullsEyeError> {
     let (earnings_date, price, next_yr_rev) =
         bullseye_api::scrape_regular_update(ticker, exchange).await?;
-    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
-    // if update_date {
     db::update_earnings_date(company_id, earnings_date, conn)?;
-    // }
     db::update_estimate(company_id, next_yr_rev, conn)?;
     db::update_price(company_id, price, conn)?;
     Ok(())
