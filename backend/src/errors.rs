@@ -22,7 +22,13 @@ impl IntoResponse for BullsEyeError {
             BullsEyeError::ScraperError(ScraperError::InvalidTickerError(_)) => {
                 StatusCode::BAD_REQUEST
             }
+            BullsEyeError::ScraperError(ScraperError::MissingDataError(_, _)) => {
+                StatusCode::BAD_REQUEST
+            }
             BullsEyeError::ScraperError(ScraperError::DriverFailureError(_)) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            BullsEyeError::ScraperError(ScraperError::MissingProfileError()) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             BullsEyeError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,

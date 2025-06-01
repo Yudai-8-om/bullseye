@@ -1,142 +1,158 @@
+// use crate::db_operations;
 use crate::db;
 use crate::errors::BullsEyeError;
-use bullseye_api::table;
-// use chrono::{Duration, Local};
-use db::NewStockEntry;
+use crate::models::companies_model::{Company, NewCompany};
+use crate::models::earnings_model;
+use crate::models::earnings_model::NewEarningsReport;
+use crate::models::forecast_models::NewForecasts;
+use crate::models::metrics_model::{CurrentMetrics, NewCurrentMetrics};
+use bullseye_api::model::Exchange;
 use diesel::pg::PgConnection;
 
-/// This function adds new ticker data in the database.
-///
-/// # Arguments
-///
-/// * `new_ticker` - The ticker you are adding
-/// * `exchange` - Exchange enum
-/// * `conn` - PgConnection(diesel) instance
-///
-/// # Returns
-///
-/// * `Ok(())` if the operation was successful.
-/// * `Err(BullsEyeError)` if an error occurred during scraping or database insertion.
-pub async fn handle_new_ticker(
-    new_ticker: &str,
-    exchange: &table::Exchange,
+/// runs when handling new ticker data.
+/// creates new company row for all 3 tables.
+pub async fn get_company(
+    ticker: &str,
+    exchange: &Exchange,
     conn: &mut PgConnection,
-) -> Result<(), BullsEyeError> {
-    let (
-        concat_statement_ttm,
-        concat_statement_annual,
-        currency,
-        industry,
-        earnings_date,
-        price,
-        next_yr_rev,
-    ) = bullseye_api::scrape_init(new_ticker, exchange).await?;
-    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
-        .into_iter()
-        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-        .collect();
-    let annual_entries: Vec<NewStockEntry> = concat_statement_annual
-        .into_iter()
-        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-        .collect();
-    db::insert_stock_data_batch(ttm_entries, conn)?;
-    db::insert_stock_data_batch(annual_entries, conn)?;
-    db::update_growths(conn)?;
-    db::update_ratios_batch(conn)?;
-    db::add_new_eval(
-        new_ticker,
-        exchange,
-        &currency,
-        &industry,
-        earnings_date,
-        price,
-        next_yr_rev,
-        conn,
-    )
-    .await;
-    Ok(())
+) -> Result<Company, BullsEyeError> {
+    let company_profile = bullseye_api::scrape_profile(ticker, exchange).await?;
+    if let Some(company) = Company::load_if_existed(&company_profile, conn)? {
+        Ok(company)
+    } else {
+        let new_company_entry = NewCompany::create_new_entry(
+            &company_profile.company_name,
+            &company_profile.industry,
+            &company_profile.isin_number,
+        );
+        let new_company = new_company_entry.add_new_company(conn)?;
+        let new_metrics_entry =
+            NewCurrentMetrics::create_new_entry(new_company.id, exchange, ticker, "")?;
+        new_metrics_entry.insert_new_metrics(conn)?;
+        let new_forecast_entry = NewForecasts::create_empty(new_company.id);
+        new_forecast_entry.insert_new_forecast(conn)?;
+        Ok(new_company)
+    }
 }
 
-/// This function updates data upon earnings and price changes.
-///
-/// # Arguments
-///
-/// * `ticker` - The ticker you are updating
-/// * `exchange` - Exchange enum
-/// * `conn` - PgConnection(diesel) instance
-///
-/// # Returns
-///
-/// * `Ok(())` if the operation was successful.
-/// * `Err(BullsEyeError)` if an error occurred during scraping or database insertion.
+// pub async fn handle_new_ticker(
+//     company_id: i32,
+//     new_ticker: &str,
+//     exchange: &Exchange,
+//     conn: &mut PgConnection,
+// ) -> Result<(), BullsEyeError> {
+//     let (earnings_enum_ttm, earnings_enum_annual, currency, earnings_date, price, next_yr_rev) =
+//         bullseye_api::scrape_init(new_ticker, exchange).await?;
+//     let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
+//     let annual_entries =
+//         NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_annual);
+//     earnings_model::insert_earnings_report_batch(ttm_entries, conn)?;
+//     earnings_model::insert_earnings_report_batch(annual_entries, conn)?;
+//     db::update_growths_batch(conn)?;
+//     db::update_ratios_batch(conn)?;
+//     db::update_earnings_date(company_id, earnings_date, conn)?;
+//     db::update_price(company_id, price, conn)?;
+//     db::update_estimate(company_id, next_yr_rev, conn)?;
+//     Ok(())
+// }
+
+/// runs after Q4 Earnings or for the initial update.
+/// includes:
+///     storing latest earnings data (TTM & Annual)
+///     filling missing fields
+///     updating estimates and current stock price
 pub async fn update_earnings_all(
+    company_id: i32,
     ticker: &str,
-    exchange: &table::Exchange,
+    exchange: &Exchange,
     conn: &mut PgConnection,
 ) -> Result<(), BullsEyeError> {
-    let (concat_statement_ttm, concat_statement_annual, _, price, next_yr_rev) =
-        bullseye_api::scrape_annual_update(ticker, exchange).await?;
-    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
-        .into_iter()
-        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-        .collect();
-    let annual_entries: Vec<NewStockEntry> = concat_statement_annual
-        .into_iter()
-        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-        .collect();
-    let is_ttm_entries_existed = db::insert_stock_data_batch(ttm_entries, conn)?;
-    let is_annual_entries_existed = db::insert_stock_data_batch(annual_entries, conn)?;
-    if is_ttm_entries_existed && is_annual_entries_existed {
-        db::update_growths(conn)?;
+    let (earnings_enum_ttm, earnings_enum_annual, currency, earnings_date, price, next_yr_rev) =
+        bullseye_api::scrape_all(ticker, exchange).await?;
+    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
+    let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
+    let annual_entries =
+        NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_annual);
+    let is_ttm_entries_existed = earnings_model::insert_earnings_report_batch(ttm_entries, conn)?;
+    let is_annual_entries_existed =
+        earnings_model::insert_earnings_report_batch(annual_entries, conn)?;
+    if is_ttm_entries_existed || is_annual_entries_existed {
+        db::update_growths_batch(conn)?;
         db::update_ratios_batch(conn)?;
-        db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
-        db::update_estimate(
-            &ticker,
-            table::get_exchange_string(&exchange),
-            next_yr_rev,
-            conn,
-        )?;
     }
-    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn)?;
+    db::update_earnings_date(company_id, earnings_date, conn)?;
+    db::update_estimate(company_id, next_yr_rev, conn)?;
+    db::update_price(company_id, price, conn)?;
     Ok(())
 }
 
+/// runs  after Q1-Q3 Earnings.
+/// includes:
+///     storing latest earnings data (TTM)
+///     filling missing fields
+///     updating estimates and current stock price
 pub async fn update_earnings_ttm(
+    company_id: i32,
     ticker: &str,
-    exchange: &table::Exchange,
+    exchange: &Exchange,
     conn: &mut PgConnection,
 ) -> Result<(), BullsEyeError> {
-    let (concat_statement_ttm, _, price) =
+    let (earnings_enum_ttm, currency, earnings_date, price, next_yr_rev) =
         bullseye_api::scrape_quarter_update(ticker, exchange).await?;
-    let ttm_entries: Vec<NewStockEntry> = concat_statement_ttm
-        .into_iter()
-        .filter_map(|x| db::NewStockEntry::add_new_entry(x))
-        .collect();
-    let is_entries_existed = db::insert_stock_data_batch(ttm_entries, conn)?;
+    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
+    let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
+    let is_entries_existed = earnings_model::insert_earnings_report_batch(ttm_entries, conn)?;
     if is_entries_existed {
-        db::update_growths(conn)?;
+        db::update_growths_batch(conn)?;
         db::update_ratios_batch(conn)?;
-        db::empty_earnings_date(ticker, table::get_exchange_string(&exchange), conn)?;
     }
-    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn)?;
+    db::update_earnings_date(company_id, earnings_date, conn)?;
+    db::update_estimate(company_id, next_yr_rev, conn)?;
+    db::update_price(company_id, price, conn)?;
     Ok(())
 }
 
+/// updates earnings date and current stock price
 pub async fn update_regular(
+    company_id: i32,
     ticker: &str,
-    exchange: &table::Exchange,
+    exchange: &Exchange,
     conn: &mut PgConnection,
-    update_date: bool,
+    // update_date: bool,
 ) -> Result<(), BullsEyeError> {
-    let (earnings_date, price) = bullseye_api::scrape_regular_update(ticker, exchange).await?;
-    if update_date {
-        db::update_earnings_date(
-            ticker,
-            table::get_exchange_string(&exchange),
-            earnings_date,
-            conn,
-        )?;
-    }
-    db::update_price(&ticker, table::get_exchange_string(&exchange), price, conn)?;
+    let (earnings_date, price, next_yr_rev) =
+        bullseye_api::scrape_regular_update(ticker, exchange).await?;
+    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
+    // if update_date {
+    db::update_earnings_date(company_id, earnings_date, conn)?;
+    // }
+    db::update_estimate(company_id, next_yr_rev, conn)?;
+    db::update_price(company_id, price, conn)?;
     Ok(())
+}
+
+/// updates all metrics after earnings
+pub fn update_metrics_ttm(
+    comp_id: i32,
+    conn: &mut PgConnection,
+) -> Result<CurrentMetrics, BullsEyeError> {
+    db::copy_latest_data(comp_id, conn)?;
+    let latest_metrics = db::update_short_term_trends(comp_id, conn)?;
+    db::update_price_target(comp_id, conn)?;
+    db::update_guidance(comp_id, conn)?;
+    Ok(latest_metrics)
+}
+
+/// updates all metrics after earnings. This only runs after Q4 Earnings.
+pub fn update_metrics_annual(
+    comp_id: i32,
+    conn: &mut PgConnection,
+) -> Result<CurrentMetrics, BullsEyeError> {
+    db::copy_latest_data(comp_id, conn)?;
+    db::update_short_term_trends(comp_id, conn)?;
+    db::update_multi_yr_growth(comp_id, conn)?;
+    let latest_metrics = db::update_long_term_trends(comp_id, conn)?;
+    db::update_price_target(comp_id, conn)?;
+    db::update_guidance(comp_id, conn)?;
+    Ok(latest_metrics)
 }

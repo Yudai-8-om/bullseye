@@ -1,6 +1,5 @@
-use crate::db::StockData;
-use crate::models::earnings_model::NominalEarnings;
-use crate::schema::{nominal_earnings, nominal_metrics, stock_data, stock_health_eval};
+use crate::models::earnings_model::EarningsReport;
+use crate::schema::{current_metrics, earnings_report, forecasts};
 use diesel::associations::HasTable;
 use diesel::helper_types::Limit;
 use diesel::pg::{Pg, PgConnection};
@@ -32,34 +31,14 @@ where
 }
 
 pub fn load_multiple_earnings_ttm(
-    target_ticker: &str,
-    target_exchange: &str,
+    target_id: i32,
     num_row: i64,
     conn: &mut PgConnection,
-) -> Result<Vec<StockData>, DieselError> {
-    use crate::schema::stock_data::dsl::*;
+) -> Result<Vec<EarningsReport>, DieselError> {
+    use crate::schema::earnings_report::dsl::*;
     load_table(
-        stock_data
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange))
-            .filter(duration.eq("T"))
-            .order((year_str.desc(), quarter_str.desc())),
-        num_row,
-        conn,
-    )
-}
-
-pub fn load_multiple_earnings_ttm_new(
-    target_ticker: &str,
-    target_exchange: &str,
-    num_row: i64,
-    conn: &mut PgConnection,
-) -> Result<Vec<NominalEarnings>, DieselError> {
-    use crate::schema::nominal_earnings::dsl::*;
-    load_table(
-        nominal_earnings
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange))
+        earnings_report
+            .filter(company_id.eq(target_id))
             .filter(duration.eq("T"))
             .order((year_str.desc(), quarter_str.desc())),
         num_row,
@@ -68,16 +47,14 @@ pub fn load_multiple_earnings_ttm_new(
 }
 
 pub fn load_multiple_earnings_annual(
-    target_ticker: &str,
-    target_exchange: &str,
+    target_id: i32,
     num_row: i64,
     conn: &mut PgConnection,
-) -> Result<Vec<StockData>, DieselError> {
-    use crate::schema::stock_data::dsl::*;
+) -> Result<Vec<EarningsReport>, DieselError> {
+    use crate::schema::earnings_report::dsl::*;
     load_table(
-        stock_data
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange))
+        earnings_report
+            .filter(company_id.eq(target_id))
             .filter(duration.eq("Y"))
             .order(year_str.desc()),
         num_row,
@@ -85,44 +62,26 @@ pub fn load_multiple_earnings_annual(
     )
 }
 
-pub fn load_multiple_earnings_annual_new(
-    target_ticker: &str,
-    target_exchange: &str,
-    num_row: i64,
-    conn: &mut PgConnection,
-) -> Result<Vec<NominalEarnings>, DieselError> {
-    use crate::schema::nominal_earnings::dsl::*;
-    load_table(
-        nominal_earnings
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange))
-            .filter(duration.eq("Y"))
-            .order(year_str.desc()),
-        num_row,
-        conn,
-    )
-}
-
-pub fn load_multiple_earnings_annual_filter<'a, F>(
-    target_ticker: &'a str,
-    target_exchange: &'a str,
-    additional_filter: F,
-    num_row: i64,
-    conn: &mut PgConnection,
-) -> Result<Vec<StockData>, DieselError>
-where
-    F: FnOnce(stock_data::BoxedQuery<'a, Pg>) -> stock_data::BoxedQuery<'a, Pg>,
-{
-    use crate::schema::stock_data::dsl::*;
-    let base_query = stock_data
-        .filter(ticker.eq(target_ticker))
-        .filter(exchange.eq(target_exchange))
-        .filter(duration.eq("Y"))
-        .order(year_str.desc())
-        .into_boxed();
-    let query = additional_filter(base_query);
-    load_table(query, num_row, conn)
-}
+// pub fn load_multiple_earnings_annual_filter<'a, F>(
+//     target_ticker: &'a str,
+//     target_exchange: &'a str,
+//     additional_filter: F,
+//     num_row: i64,
+//     conn: &mut PgConnection,
+// ) -> Result<Vec<StockData>, DieselError>
+// where
+//     F: FnOnce(stock_data::BoxedQuery<'a, Pg>) -> stock_data::BoxedQuery<'a, Pg>,
+// {
+//     use crate::schema::stock_data::dsl::*;
+//     let base_query = stock_data
+//         .filter(ticker.eq(target_ticker))
+//         .filter(exchange.eq(target_exchange))
+//         .filter(duration.eq("Y"))
+//         .order(year_str.desc())
+//         .into_boxed();
+//     let query = additional_filter(base_query);
+//     load_table(query, num_row, conn)
+// }
 
 fn update_table<T, U>(table: T, updates: U, conn: &mut PgConnection) -> Result<usize, DieselError>
 where
@@ -136,6 +95,23 @@ where
     diesel::update(table).set(updates).execute(conn)
 }
 
+pub fn update_and_return_table<'query, T, U, V>(
+    table: T,
+    updates: U,
+    conn: &mut PgConnection,
+) -> Result<V, DieselError>
+where
+    T: IntoUpdateTarget + HasTable,
+    U: AsChangeset<Target = T::Table>,
+    T::Table: QueryFragment<Pg>,
+    T::WhereClause: QueryFragment<Pg>,
+    UpdateStatement<T::Table, T::WhereClause, U::Changeset>:
+        AsQuery + QueryFragment<Pg> + LoadQuery<'query, PgConnection, V>,
+    U::Changeset: QueryFragment<Pg>,
+{
+    diesel::update(table).set(updates).get_result(conn)
+}
+
 /// updates specific earnings data for the given earnings
 pub fn update_earnings_table<U>(
     curr_id: i32,
@@ -143,48 +119,39 @@ pub fn update_earnings_table<U>(
     conn: &mut PgConnection,
 ) -> Result<usize, DieselError>
 where
-    U: AsChangeset<Target = nominal_earnings::table>,
+    U: AsChangeset<Target = earnings_report::table>,
     U::Changeset: QueryFragment<Pg>,
 {
-    use crate::schema::nominal_earnings::dsl::*;
-    update_table(nominal_earnings.filter(id.eq(curr_id)), updates, conn)
+    use crate::schema::earnings_report::dsl::*;
+    update_table(earnings_report.filter(id.eq(curr_id)), updates, conn)
 }
 
-pub fn update_eval_table<U>(
-    target_ticker: &str,
-    target_exchange: &str,
+pub fn update_metrics_table<U>(
+    comp_id: i32,
     updates: U,
     conn: &mut PgConnection,
 ) -> Result<usize, DieselError>
 where
-    U: AsChangeset<Target = stock_health_eval::table>,
+    U: AsChangeset<Target = current_metrics::table>,
     U::Changeset: QueryFragment<Pg>,
 {
-    use crate::schema::stock_health_eval::dsl::*;
+    use crate::schema::current_metrics::dsl::*;
     update_table(
-        stock_health_eval
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange)),
+        current_metrics.filter(company_id.eq(comp_id)),
         updates,
         conn,
     )
 }
-pub fn update_metrics_table<U>(
-    target_ticker: &str,
-    target_exchange: &str,
+
+pub fn update_forecasts_table<U>(
+    comp_id: i32,
     updates: U,
     conn: &mut PgConnection,
 ) -> Result<usize, DieselError>
 where
-    U: AsChangeset<Target = nominal_metrics::table>,
+    U: AsChangeset<Target = forecasts::table>,
     U::Changeset: QueryFragment<Pg>,
 {
-    use crate::schema::nominal_metrics::dsl::*;
-    update_table(
-        nominal_metrics
-            .filter(ticker.eq(target_ticker))
-            .filter(exchange.eq(target_exchange)),
-        updates,
-        conn,
-    )
+    use crate::schema::forecasts::dsl::*;
+    update_table(forecasts.filter(company_id.eq(comp_id)), updates, conn)
 }

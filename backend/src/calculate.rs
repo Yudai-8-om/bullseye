@@ -30,17 +30,24 @@ pub fn calculate_yoy_growth(curr_val: f64, prev_val: f64) -> f64 {
     let growth = ((curr_val / prev_val * 100. - 100.) * 100.).round() / 100.;
     growth
 }
-
-pub fn calculate_average_growth(growth_vec: Vec<f64>) -> f64 {
-    growth_vec.iter().sum::<f64>() / growth_vec.len() as f64
+pub fn calculate_yoy_growth_option(curr_val: Option<f64>, prev_val: Option<f64>) -> Option<f64> {
+    if curr_val <= Some(0.) || prev_val <= Some(0.) {
+        return None;
+    }
+    curr_val
+        .zip(prev_val)
+        .map(|(curr, prev)| ((curr / prev * 100. - 100.) * 100.).round() / 100.)
 }
 
-pub fn calculate_short_term_trend(vals: &[f64], flat_threshold: f64) -> Vec<Trend> {
+pub fn calculate_short_term_trend(vals: &[f64], length: usize, flat_threshold: f64) -> Vec<Trend> {
+    if vals.len() < length + 4 {
+        return vec![Trend::Irrelevant];
+    }
     vals.iter()
-        .take(4)
+        .take(length)
         .enumerate()
         .map(|(i, v)| {
-            let past_four_vals = &vals[i + 1..i + 5]; //TODO range error fix needed
+            let past_four_vals = &vals[i + 1..i + 5];
             let past_four_ave = past_four_vals.iter().sum::<f64>() / past_four_vals.len() as f64;
             // average_options(past_four_vals, ignore_none);
             if v - past_four_ave >= flat_threshold {
@@ -56,14 +63,18 @@ pub fn calculate_short_term_trend(vals: &[f64], flat_threshold: f64) -> Vec<Tren
 
 pub fn calculate_short_term_trend_option(
     vals: &[Option<f64>],
+    length: usize,
     ignore_none: bool,
     flat_threshold: f64,
 ) -> Vec<Trend> {
+    if vals.len() < length + 4 {
+        return vec![Trend::Irrelevant];
+    }
     vals.iter()
-        .take(4)
+        .take(length)
         .enumerate()
         .map(|(i, v)| {
-            let past_four_vals = &vals[i + 1..i + 5]; //TODO range error fix needed
+            let past_four_vals = &vals[i + 1..i + 5];
             let past_four_ave = average_options(past_four_vals, ignore_none);
             match (v, past_four_ave) {
                 (&Some(curr), Some(prev)) => {
@@ -126,6 +137,10 @@ pub fn calculate_long_term_trend_option(
     }
 }
 
+pub fn calculate_average_growth(growth_vec: Vec<f64>) -> f64 {
+    growth_vec.iter().sum::<f64>() / growth_vec.len() as f64
+}
+
 pub fn average_options(options: &[Option<f64>], ignore_none: bool) -> Option<f64> {
     if ignore_none {
         let valid_val: Vec<f64> = options.iter().flatten().cloned().collect();
@@ -142,21 +157,6 @@ pub fn average_options(options: &[Option<f64>], ignore_none: bool) -> Option<f64
     }
 }
 
-pub fn analyze_trend(trend_vec: Vec<Trend>, count_threshold: usize) -> (bool, bool) {
-    let uptrend = trend_vec
-        .iter()
-        .filter(|val| **val == Trend::Uptrend)
-        .count();
-    let downtrend = trend_vec
-        .iter()
-        .filter(|val| **val == Trend::Downtrend)
-        .count();
-    (
-        uptrend >= count_threshold && uptrend > downtrend,
-        downtrend >= count_threshold && downtrend > uptrend,
-    )
-}
-
 pub fn concat_trend(trend_vec: Vec<Trend>, count_threshold: usize) -> Trend {
     let uptrend = trend_vec
         .iter()
@@ -166,12 +166,15 @@ pub fn concat_trend(trend_vec: Vec<Trend>, count_threshold: usize) -> Trend {
         .iter()
         .filter(|val| **val == Trend::Downtrend)
         .count();
+    let flat = trend_vec.iter().filter(|val| **val == Trend::Flat).count();
     if uptrend >= count_threshold && uptrend > downtrend {
         Trend::Uptrend
     } else if downtrend >= count_threshold && downtrend > uptrend {
         Trend::Downtrend
-    } else {
+    } else if flat >= count_threshold || uptrend == downtrend {
         Trend::Flat
+    } else {
+        Trend::Irrelevant
     }
 }
 
@@ -180,6 +183,15 @@ pub fn calculate_ratio(value: Option<f64>, total: f64) -> Option<f64> {
         return None;
     }
     value.map(|val| (val / total * 100.).round() / 100.)
+}
+
+pub fn calculate_ratio_option(value: Option<f64>, total: Option<f64>) -> Option<f64> {
+    if total <= Some(0.) {
+        return None;
+    }
+    value
+        .zip(total)
+        .map(|(top, bottom)| (top / bottom * 100.).round() / 100.)
 }
 
 pub fn calculate_ratio_as_pct(value: Option<f64>, total: f64) -> Option<f64> {
@@ -195,7 +207,7 @@ pub fn get_net_margin_factor(industry: &str) -> f64 {
         "Grocery Stores" | "Department Stores" => 9.,
         "Discount Stores" => 6.,
         "Apparel Retail" | "Apparel Manufacturing" | "Footwear & Accessories" => 5.,
-        "Banks - Diversified" | "Banks - Regional" => 4.,
+        "Banks - Diversified" | "Banks - Regional" => 5.,
         "Internet Retail" | "Specialty Retail" => 3.5,
         "Specialty Industrial Machinery" => 2.5,
         "Semiconductors"
