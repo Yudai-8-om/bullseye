@@ -15,16 +15,16 @@ use serde::Serialize;
 pub struct Forecasts {
     id: i32,
     company_id: i32,
-    next_earnings_date: Option<NaiveDate>,
-    latest_price: Option<f64>,
-    last_updated: Option<NaiveDate>,
+    pub next_earnings_date: Option<NaiveDate>,
+    pub latest_price: Option<f64>,
+    pub last_updated: Option<NaiveDate>,
     pub revenue_next_year: Option<f64>,
-    revenue_growth_next_year: Option<f64>,
-    price_current_revenue_growth: Option<f64>,
-    price_current_gp_growth: Option<f64>,
-    price_next_year_revenue_growth: Option<f64>,
-    price_multi_year_revenue_growth: Option<f64>,
-    price_multi_year_gp_growth: Option<f64>,
+    pub revenue_growth_next_year: Option<f64>,
+    pub price_current_revenue_growth: Option<f64>,
+    pub price_current_gp_growth: Option<f64>,
+    pub price_next_year_revenue_growth: Option<f64>,
+    pub price_multi_year_revenue_growth: Option<f64>,
+    pub price_multi_year_gp_growth: Option<f64>,
 }
 
 impl Forecasts {
@@ -37,7 +37,7 @@ impl Forecasts {
     pub fn is_earnings_update_needed(&self) -> bool {
         self.next_earnings_date
             .map(|date| Local::now().date_naive() - date >= Duration::days(1))
-            .unwrap_or(true)
+            .unwrap_or(self.last_updated.is_none())
     }
 
     ///checks if the price data needs to be updated
@@ -55,7 +55,7 @@ pub struct NewForecasts {
     next_earnings_date: Option<NaiveDate>,
     latest_price: Option<f64>,
     last_updated: Option<NaiveDate>,
-    pub revenue_next_year: Option<f64>,
+    revenue_next_year: Option<f64>,
     revenue_growth_next_year: Option<f64>,
     price_current_revenue_growth: Option<f64>,
     price_current_gp_growth: Option<f64>,

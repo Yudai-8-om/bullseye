@@ -9,6 +9,11 @@ diesel::table! {
         industry -> Varchar,
         #[max_length = 12]
         isin -> Varchar,
+        #[max_length = 9]
+        exchange -> Varchar,
+        #[max_length = 6]
+        ticker -> Varchar,
+        last_updated -> Date,
     }
 }
 
@@ -16,10 +21,6 @@ diesel::table! {
     current_metrics (id) {
         id -> Int4,
         company_id -> Int4,
-        #[max_length = 9]
-        exchange -> Varchar,
-        #[max_length = 6]
-        ticker -> Varchar,
         #[max_length = 3]
         currency -> Varchar,
         net_interest_income_growth_yoy_ttm -> Nullable<Float8>,

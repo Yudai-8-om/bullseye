@@ -1,5 +1,6 @@
 use crate::models::earnings_model::EarningsReport;
 use crate::schema::{current_metrics, earnings_report, forecasts};
+use chrono::Local;
 use diesel::associations::HasTable;
 use diesel::helper_types::Limit;
 use diesel::pg::{Pg, PgConnection};
@@ -110,6 +111,16 @@ where
     U::Changeset: QueryFragment<Pg>,
 {
     diesel::update(table).set(updates).get_result(conn)
+}
+
+/// updates specific earnings data for the given earnings
+pub fn update_company_table(curr_id: i32, conn: &mut PgConnection) -> Result<usize, DieselError> {
+    use crate::schema::companies::dsl::*;
+    update_table(
+        companies.filter(id.eq(curr_id)),
+        last_updated.eq(Local::now().date_naive()),
+        conn,
+    )
 }
 
 /// updates specific earnings data for the given earnings

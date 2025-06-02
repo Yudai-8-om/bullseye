@@ -145,8 +145,12 @@ pub fn average_options(options: &[Option<f64>], ignore_none: bool) -> Option<f64
     if ignore_none {
         let valid_val: Vec<f64> = options.iter().flatten().cloned().collect();
         let valid_len = valid_val.len();
-        let valid_sum: f64 = valid_val.iter().sum();
-        Some(valid_sum / valid_len as f64)
+        if valid_len == 0 {
+            return None;
+        } else {
+            let valid_sum: f64 = valid_val.iter().sum();
+            Some(valid_sum / valid_len as f64)
+        }
     } else {
         if options.iter().any(|x| x.is_none()) {
             return None;
@@ -199,6 +203,15 @@ pub fn calculate_ratio_as_pct(value: Option<f64>, total: f64) -> Option<f64> {
         return None;
     }
     value.map(|val| (val / total * 10000.).round() / 100.)
+}
+
+pub fn calculate_ratio_as_pct_option(value: Option<f64>, total: Option<f64>) -> Option<f64> {
+    if total <= Some(0.) {
+        return None;
+    }
+    value
+        .zip(total)
+        .map(|(top, bottom)| (top / bottom * 10000.).round() / 100.)
 }
 
 pub fn get_net_margin_factor(industry: &str) -> f64 {

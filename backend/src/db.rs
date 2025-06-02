@@ -148,6 +148,10 @@ pub fn update_short_term_trends(
 ) -> Result<CurrentMetrics, DieselError> {
     use crate::schema::current_metrics::dsl::*;
     let target = query::load_multiple_earnings_ttm(comp_id, 8, conn)?;
+    let nim_trend =
+        metrics::get_short_term_trend_option(&target, |f| f.net_interest_margin, 4, true, 0.5, 2);
+    let cor_trend =
+        metrics::get_short_term_trend_option(&target, |f| f.cost_of_risk, 4, true, 0.5, 2);
     let gross_margin_trend =
         metrics::get_short_term_trend_option(&target, |f| f.gross_margin, 4, true, 0.5, 2);
     let sga_ratio_trend =
@@ -169,6 +173,8 @@ pub fn update_short_term_trends(
     let updated_row = query::update_and_return_table(
         current_metrics.filter(company_id.eq(comp_id)),
         (
+            net_interest_margin_short_term_trend.eq(nim_trend),
+            cost_of_risk_short_term_trend.eq(cor_trend),
             gross_margin_short_term_trend.eq(gross_margin_trend),
             sga_short_term_trend.eq(sga_ratio_trend),
             rnd_short_term_trend.eq(rnd_ratio_trend),
@@ -186,8 +192,9 @@ pub fn update_long_term_trends(
 ) -> Result<CurrentMetrics, DieselError> {
     use crate::schema::current_metrics::dsl::*;
     let target = query::load_multiple_earnings_annual(comp_id, 6, conn)?;
-    let net_interest_margin_trend =
+    let nim_trend =
         metrics::get_long_term_trend_option(&target, |f| f.net_interest_margin, false, 1.);
+    let cor_trend = metrics::get_long_term_trend_option(&target, |f| f.cost_of_risk, false, 1.);
     let gross_margin_trend =
         metrics::get_long_term_trend_option(&target, |f| f.gross_margin, false, 1.);
     let sga_ratio_trend =
@@ -206,7 +213,8 @@ pub fn update_long_term_trends(
     let updated_row = query::update_and_return_table(
         current_metrics.filter(company_id.eq(comp_id)),
         (
-            net_interest_margin_long_term_trend.eq(net_interest_margin_trend),
+            net_interest_margin_long_term_trend.eq(nim_trend),
+            cost_of_risk_long_term_trend.eq(cor_trend),
             gross_margin_long_term_trend.eq(gross_margin_trend),
             sga_long_term_trend.eq(sga_ratio_trend),
             rnd_long_term_trend.eq(rnd_ratio_trend),
@@ -240,6 +248,8 @@ pub fn copy_latest_data(comp_id: i32, conn: &mut PgConnection) -> Result<(), Die
         (
             current_metrics::currency.eq(latest_earnings_ttm.currency),
             net_interest_income_growth_yoy_ttm.eq(latest_earnings_ttm.net_interest_growth_yoy),
+            net_interest_margin_ttm.eq(latest_earnings_ttm.net_interest_margin),
+            cost_of_risk_ttm.eq(latest_earnings_ttm.cost_of_risk),
             revenue_ttm.eq(latest_earnings_ttm.revenue),
             revenue_growth_yoy_ttm.eq(latest_earnings_ttm.revenue_growth_yoy),
             gross_profit_growth_yoy_ttm.eq(latest_earnings_ttm.gross_profit_growth_yoy),
@@ -257,6 +267,7 @@ pub fn copy_latest_data(comp_id: i32, conn: &mut PgConnection) -> Result<(), Die
             operating_cash_flow_margin_ttm.eq(latest_earnings_ttm.operating_cash_flow_margin),
             free_cash_flow_ttm.eq(latest_earnings_ttm.free_cash_flow),
             free_cash_flow_margin_ttm.eq(latest_earnings_ttm.free_cash_flow_margin),
+            ffo_margin_ttm.eq(latest_earnings_ttm.ffo_margin),
         ),
         conn,
     )?;

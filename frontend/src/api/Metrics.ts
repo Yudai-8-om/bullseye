@@ -1,11 +1,17 @@
-export interface NominalMetrics {
-  id: number;
+export interface Metrics {
+  companyName: string;
+  industry: string;
   exchange: string;
   ticker: string;
   currency: string;
-  favorite: boolean;
-  industry: string;
-  nextEarningsDate: Date | undefined;
+  netInterestIncomeGrowthYoyTtm: number | undefined;
+  netInterestIncomeGrowthMultiYear: number | undefined;
+  netInterestMarginTtm: number | undefined;
+  netInterestMarginShortTermTrend: string | undefined;
+  netInterestMarginLongTermTrend: string | undefined;
+  costOfRiskTtm: number | undefined;
+  costOfRiskShortTermTrend: string | undefined;
+  costOfRiskLongTermTrend: string | undefined;
   revenueTtm: number | undefined;
   revenueGrowthYoyTtm: number | undefined;
   revenueGrowthMultiYear: number | undefined;
@@ -41,13 +47,16 @@ export interface NominalMetrics {
   operatingCashFlowMarginTrend: string | undefined;
   freeCashFlowTtm: number | undefined;
   freeCashFlowMarginTtm: number | undefined;
-  revenueNextYear: number | undefined;
-  revenueGrowthNextYear: number | undefined;
+  ffoMarginTtm: number | undefined;
+  ffoMarginTrend: string | undefined;
+  nextEarningsDate: Date | undefined;
+  latestPrice: number | undefined;
+  lastUpdated: Date | undefined;
+  revenueNextYear: number;
+  revenueGrowthNextYear: number;
   priceCurrentRevenueGrowth: number | undefined;
   priceCurrentGpGrowth: number | undefined;
   priceNextYearRevenueGrowth: number | undefined;
   priceMultiYearRevenueGrowth: number | undefined;
   priceMultiYearGpGrowth: number | undefined;
-  latestPrice: number | undefined;
-  lastUpdated: Date | undefined;
 }

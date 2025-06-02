@@ -1,11 +1,11 @@
-import { NominalMetrics } from "./nominalMetrics";
+import { Metrics } from "../api/Metrics";
 
 const baseUrl = "http://localhost:3000";
 
-export async function getMetrics(ticker: string): Promise<NominalMetrics> {
-  const url = `${baseUrl}/searchv2/${ticker.toLowerCase()}`;
+export async function getMetrics(ticker: string): Promise<Metrics> {
+  const url = `${baseUrl}/search/${ticker.toLowerCase()}`;
   try {
-    const metrics = await fetchData<NominalMetrics>(url);
+    const metrics = await fetchData<Metrics>(url);
     console.log(JSON.stringify(metrics, null, 2));
     return metrics;
   } catch (error) {

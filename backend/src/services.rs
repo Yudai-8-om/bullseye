@@ -5,6 +5,8 @@ use crate::models::earnings_model;
 use crate::models::earnings_model::NewEarningsReport;
 use crate::models::forecast_models::NewForecasts;
 use crate::models::metrics_model::{CurrentMetrics, NewCurrentMetrics};
+use crate::query;
+use bullseye_api::model::get_exchange_string;
 use bullseye_api::model::Exchange;
 use diesel::pg::PgConnection;
 
@@ -15,18 +17,27 @@ pub async fn get_company(
     exchange: &Exchange,
     conn: &mut PgConnection,
 ) -> Result<Company, BullsEyeError> {
+    if let Some(company) =
+        Company::load_by_ticker_if_existed(ticker, get_exchange_string(exchange), conn)?
+    {
+        if !company.ticker_check_needed() {
+            return Ok(company);
+        }
+    }
     let company_profile = bullseye_api::scrape_profile(ticker, exchange).await?;
     if let Some(company) = Company::load_if_existed(&company_profile, conn)? {
+        query::update_company_table(company.id, conn)?; //TODO: reflect ticker change
         Ok(company)
     } else {
         let new_company_entry = NewCompany::create_new_entry(
             &company_profile.company_name,
             &company_profile.industry,
             &company_profile.isin_number,
+            exchange,
+            ticker,
         );
         let new_company = new_company_entry.add_new_company(conn)?;
-        let new_metrics_entry =
-            NewCurrentMetrics::create_new_entry(new_company.id, exchange, ticker, "")?;
+        let new_metrics_entry = NewCurrentMetrics::create_new_entry(new_company.id, "")?;
         new_metrics_entry.insert_new_metrics(conn)?;
         let new_forecast_entry = NewForecasts::create_empty(new_company.id);
         new_forecast_entry.insert_new_forecast(conn)?;
@@ -47,7 +58,6 @@ pub async fn update_earnings_all(
 ) -> Result<(), BullsEyeError> {
     let (earnings_enum_ttm, earnings_enum_annual, currency, earnings_date, price, next_yr_rev) =
         bullseye_api::scrape_all(ticker, exchange).await?;
-    // let company_id = CurrentMetrics::get_company_id(ticker, get_exchange_string(exchange), conn)?;
     let ttm_entries = NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_ttm);
     let annual_entries =
         NewEarningsReport::create_new_entry(company_id, &currency, earnings_enum_annual);

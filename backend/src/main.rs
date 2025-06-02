@@ -7,6 +7,7 @@ use errors::BullsEyeError;
 use models::earnings_model::EarningsReport;
 use models::forecast_models::Forecasts;
 use models::metrics_model::CurrentMetrics;
+use models::returning_model::ReturningModel;
 use tower_http::cors::{Any, CorsLayer};
 // use serde::Deserialize;
 // use http::Method;
@@ -24,7 +25,7 @@ mod services;
 async fn search(
     State(pool): State<Pool<ConnectionManager<PgConnection>>>,
     Path(ticker): Path<String>,
-) -> Result<Json<CurrentMetrics>, BullsEyeError> {
+) -> Result<Json<ReturningModel>, BullsEyeError> {
     let exchange = lookup_exchange(&ticker);
     let conn = &mut pool.get().unwrap();
     let company = services::get_company(&ticker, &exchange, conn).await?;
@@ -48,10 +49,15 @@ async fn search(
         if regular_update_needed {
             services::update_regular(company.id, &ticker, &exchange, conn).await?;
         }
-        // services::update_metrics_annual(company.id, conn)?;
+        services::update_metrics_annual(company.id, conn)?;
     }
     let all_metrics = CurrentMetrics::load_by_id(company.id, conn)?;
-    Ok(Json(all_metrics))
+    let all_forecasts = Forecasts::load_by_id(company.id, conn)?;
+    Ok(Json(ReturningModel::new(
+        company,
+        all_metrics,
+        all_forecasts,
+    )))
 }
 
 // #[derive(Deserialize)]

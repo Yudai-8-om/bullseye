@@ -4,6 +4,9 @@ CREATE TABLE companies (
     company_name VARCHAR(50) NOT NULL,
     industry VARCHAR(50) NOT NULL,
     isin VARCHAR(12) NOT NULL,
+    exchange VARCHAR(9) NOT NULL,
+    ticker VARCHAR(6) NOT NULL,
+    last_updated DATE NOT NULL,
     UNIQUE(isin)
 );
 
@@ -26,8 +29,6 @@ CREATE TABLE forecasts(
 CREATE TABLE current_metrics (
     id SERIAL PRIMARY KEY,
     company_id INTEGER REFERENCES companies(id) NOT NULL,
-    exchange VARCHAR(9) NOT NULL,
-    ticker VARCHAR(6) NOT NULL,
     currency VARCHAR(3) NOT NULL,
     net_interest_income_growth_yoy_ttm DOUBLE PRECISION,
     net_interest_income_growth_multi_year DOUBLE PRECISION,

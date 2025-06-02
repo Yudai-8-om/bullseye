@@ -28,7 +28,7 @@ pub struct EarningsReport {
     pub net_interest_growth_yoy: Option<f64>,
     pub net_interest_margin: Option<f64>,
     provision_for_loan_loss: Option<f64>,
-    cost_of_risk: Option<f64>,
+    pub cost_of_risk: Option<f64>,
     pub revenue: f64,
     pub revenue_growth_yoy: Option<f64>,
     cost_of_revenue: Option<f64>,
@@ -148,18 +148,36 @@ impl EarningsReport {
     pub fn update_ratios(&self, conn: &mut PgConnection) -> Result<(), DieselError> {
         use crate::schema::earnings_report::dsl::*;
         let curr_id = self.id;
+        let interest_earning_assets = match (self.total_investments, self.gross_loans) {
+            (Some(x), Some(y)) => Some(x + y),
+            _ => None,
+        };
+        let nim = calculate::calculate_ratio_as_pct_option(
+            self.net_interest_income,
+            interest_earning_assets,
+        );
+        let cor = calculate::calculate_ratio_as_pct_option(
+            self.provision_for_loan_loss,
+            self.gross_loans,
+        );
         let sga_ratio = calculate::calculate_ratio_option(self.sga_expenses, self.gross_profit);
         let rnd_ratio = calculate::calculate_ratio_option(self.rnd_expenses, self.gross_profit);
         let interest_ratio =
             calculate::calculate_ratio(self.interest_expenses, self.operating_income);
+        let op_margin = (self.operating_income / self.revenue * 10000.).round() / 100.;
+        let nt_margin = (self.net_income / self.revenue * 10000.).round() / 100.;
         let ocfm = calculate::calculate_ratio_as_pct(self.operating_cash_flow, self.revenue);
         let ffom = calculate::calculate_ratio_as_pct(self.ffo, self.revenue);
         query::update_earnings_table(
             curr_id,
             (
+                net_interest_margin.eq(nim),
+                cost_of_risk.eq(cor),
                 sga_gp_ratio.eq(sga_ratio),
                 rnd_gp_ratio.eq(rnd_ratio),
                 interest_expenses_op_income_ratio.eq(interest_ratio),
+                operating_margin.eq(op_margin),
+                net_margin.eq(nt_margin),
                 ffo_margin.eq(ffom),
                 operating_cash_flow_margin.eq(ocfm),
                 ratio_calculated.eq(true),
