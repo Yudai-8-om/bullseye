@@ -1,9 +1,5 @@
 use crate::models::metrics_model::Trend;
 
-pub fn calculate_price_target(eps: f64, growth_pct: f64, share_change: f64) -> f64 {
-    eps * calculate_growth_adjustment_factor(growth_pct - share_change)
-}
-
 pub fn calculate_price_target_option(
     eps: Option<f64>,
     growth_pct: Option<f64>,
@@ -220,7 +216,7 @@ pub fn get_net_margin_factor(industry: &str) -> f64 {
         "Grocery Stores" | "Department Stores" => 9.,
         "Discount Stores" => 6.,
         "Apparel Retail" | "Apparel Manufacturing" | "Footwear & Accessories" => 5.,
-        "Banks - Diversified" | "Banks - Regional" => 5.,
+        "Banks - Diversified" | "Banks - Regional" => 4.,
         "Internet Retail" | "Specialty Retail" => 3.5,
         "Specialty Industrial Machinery" => 2.5,
         "Semiconductors"

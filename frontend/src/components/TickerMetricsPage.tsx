@@ -1,6 +1,6 @@
 import { Metrics } from "../api/Metrics";
 import { HeartIcon } from "@heroicons/react/24/outline";
-import RevenueWidget from "./EarningsWidget";
+import EarningsWidget from "./EarningsWidget";
 
 interface MetricsPageProps {
   metrics: Metrics;
@@ -8,15 +8,35 @@ interface MetricsPageProps {
   error: string | undefined;
 }
 
+function colorcodePriceTarget(
+  pt: number | undefined,
+  price: number | undefined
+) {
+  if (pt && price && pt > price) {
+    return "text-5xl font-bold p-6 text-green-400";
+  } else if (pt && price && pt < price) {
+    return "text-5xl font-bold p-6 text-red-400";
+  } else {
+    return "text-5xl font-bold p-6 text-gray";
+  }
+}
+
+function getLowestPriceTargetTest(
+  targets: (number | undefined)[]
+): number | undefined {
+  const vals = targets.filter((val) => val !== undefined && val !== null);
+  return vals.length > 0 ? Math.min(...vals) : undefined;
+}
 function TickerMetricsPage(props: MetricsPageProps) {
   const { metrics, loading, error } = props;
 
   function getLowestPriceTarget(
     targets: (number | undefined)[]
   ): string | undefined {
-    const vals = targets.filter((val) => val !== undefined);
+    const vals = targets.filter((val) => val !== undefined && val !== null);
     return vals.length > 0 ? Math.min(...vals).toFixed(2) : undefined;
   }
+
   return (
     <div>
       {error && (
@@ -63,33 +83,29 @@ function TickerMetricsPage(props: MetricsPageProps) {
 
                   {metrics?.nextEarningsDate?.toString() ?? "-"}
                 </p>
-                <RevenueWidget metrics={metrics} />
-
-                {/* <p>
-                  <span className="font-bold">Net Margin (TTM): </span>
-                  {metrics?.netMarginTtm?.toFixed(2) ?? "-"}%
-                </p>
-                <p>
-                  <span className="font-bold">Theoretical Net Margin: </span>
-                  {metrics?.theoreticalNetMargin?.toFixed(2) ?? "-"}%
-                </p> */}
-                <p>
-                  <span className="font-bold">
-                    Free Cash Flow Margin (TTM):{" "}
-                  </span>
-                  {metrics?.freeCashFlowMarginTtm?.toFixed(2) ?? "-"}%
-                </p>
+                <EarningsWidget metrics={metrics} />
               </div>
             </div>
             <div className="col-span-7 lg:col-span-3 px-2">
-              <h2 className="font-bold">Current Stock Price</h2>
-              <div className="flex items-center p-5">
+              <h2 className="font-bold">Current Stock Price vs Price Target</h2>
+              <div className="flex items-center p-5 justify-center">
                 <h1 className="text-5xl font-bold p-6">
                   {metrics?.exchange === "US" ? "$" : "¥"}
                   {metrics?.latestPrice?.toFixed(2) ?? "-"}
                 </h1>
                 <h3>vs</h3>
-                <h1 className="text-5xl font-bold p-6 text-green-400">
+                <h1
+                  className={colorcodePriceTarget(
+                    getLowestPriceTargetTest([
+                      metrics?.priceCurrentRevenueGrowth,
+                      metrics?.priceMultiYearRevenueGrowth,
+                      metrics?.priceMultiYearGpGrowth,
+                      metrics?.priceCurrentGpGrowth,
+                      metrics?.priceNextYearRevenueGrowth,
+                    ]),
+                    metrics?.latestPrice
+                  )}
+                >
                   {metrics?.exchange === "US" ? "$" : "¥"}
                   {getLowestPriceTarget([
                     metrics?.priceCurrentRevenueGrowth,
@@ -100,7 +116,7 @@ function TickerMetricsPage(props: MetricsPageProps) {
                   ])}
                 </h1>
               </div>
-              <h2 className="font-bold">Price target</h2>
+              <h2 className="font-bold">Price target list</h2>
               <div className="p-2 space-y-2.5 flex flex-col">
                 <p>
                   Using current revenue growth (
@@ -119,33 +135,39 @@ function TickerMetricsPage(props: MetricsPageProps) {
                       "-"}{" "}
                   </span>
                 </p>
-                <p>
-                  Using current gross profit growth (
-                  {metrics?.grossProfitGrowthYoyTtm?.toFixed(2) ?? "-"}
-                  %):{" "}
-                  <span className="text-2xl">
-                    {metrics?.exchange === "US" ? "$" : "¥"}
-                    {metrics?.priceCurrentGpGrowth?.toFixed(2) ?? "-"}{" "}
-                  </span>
-                </p>
-                <p>
-                  Using multi-year gross profit growth (
-                  {metrics?.grossProfitGrowthMultiYear?.toFixed(2) ?? "-"}
-                  %):{" "}
-                  <span className="text-2xl">
-                    {metrics?.exchange === "US" ? "$" : "¥"}
-                    {metrics?.priceMultiYearGpGrowth?.toFixed(2) ?? "-"}{" "}
-                  </span>
-                </p>
-                <p>
-                  Using next year revenue growth forcast (
-                  {metrics?.revenueGrowthNextYear?.toFixed(2) ?? "-"}%):{" "}
-                  <span className="text-2xl">
-                    {metrics?.exchange === "US" ? "$" : "¥"}
-                    {metrics?.priceNextYearRevenueGrowth?.toFixed(2) ??
-                      "-"}{" "}
-                  </span>
-                </p>
+                {metrics?.priceCurrentGpGrowth && (
+                  <p>
+                    Using current gross profit growth (
+                    {metrics?.grossProfitGrowthYoyTtm?.toFixed(2) ?? "-"}
+                    %):{" "}
+                    <span className="text-2xl">
+                      {metrics?.exchange === "US" ? "$" : "¥"}
+                      {metrics?.priceCurrentGpGrowth?.toFixed(2) ?? "-"}{" "}
+                    </span>
+                  </p>
+                )}
+                {metrics?.priceMultiYearGpGrowth && (
+                  <p>
+                    Using multi-year gross profit growth (
+                    {metrics?.grossProfitGrowthMultiYear?.toFixed(2) ?? "-"}
+                    %):{" "}
+                    <span className="text-2xl">
+                      {metrics?.exchange === "US" ? "$" : "¥"}
+                      {metrics?.priceMultiYearGpGrowth?.toFixed(2) ?? "-"}{" "}
+                    </span>
+                  </p>
+                )}
+                {metrics?.priceNextYearRevenueGrowth && (
+                  <p>
+                    Using next year revenue growth forcast (
+                    {metrics?.revenueGrowthNextYear?.toFixed(2) ?? "-"}%):{" "}
+                    <span className="text-2xl">
+                      {metrics?.exchange === "US" ? "$" : "¥"}
+                      {metrics?.priceNextYearRevenueGrowth?.toFixed(2) ??
+                        "-"}{" "}
+                    </span>
+                  </p>
+                )}
                 {/* <p>
                   Simulation (
                   {metrics?.revenueGrowthNextYear?.toFixed(2) ?? "-"}%):{" "}
