@@ -103,20 +103,26 @@ function EarningsWidget({ metrics }: { metrics: Metrics }) {
         </div>
       )}
 
-      {metrics?.grossMarginTtm && (
-        <div className="flex flex-col col-span-full  bg-white rounded-xl sm:col-span-3 xl:col-span-2">
-          <MetricsCardWithTwoIndicators
-            title="Gross Margin (TTM)"
-            value={`${metrics?.grossMarginTtm?.toFixed(2) ?? "-"}%`}
-            firstIndicatorTitle="Short-term"
-            firstIndicator={`${metrics?.grossMarginShortTermTrend ?? "-"}`}
-            firstClassName={colorcodeTrend(metrics?.grossMarginShortTermTrend)}
-            secondIndicatorTitle="Long-term"
-            secondIndicator={` ${metrics?.grossMarginLongTermTrend ?? "-"}`}
-            secondClassName={colorcodeTrend(metrics?.grossMarginLongTermTrend)}
-          />
-        </div>
-      )}
+      {metrics?.grossMarginTtm !== 100 &&
+        metrics?.grossMarginTtm !== 0 &&
+        metrics?.grossMarginTtm && (
+          <div className="flex flex-col col-span-full  bg-white rounded-xl sm:col-span-3 xl:col-span-2">
+            <MetricsCardWithTwoIndicators
+              title="Gross Margin (TTM)"
+              value={`${metrics?.grossMarginTtm?.toFixed(2) ?? "-"}%`}
+              firstIndicatorTitle="Short-term"
+              firstIndicator={`${metrics?.grossMarginShortTermTrend ?? "-"}`}
+              firstClassName={colorcodeTrend(
+                metrics?.grossMarginShortTermTrend
+              )}
+              secondIndicatorTitle="Long-term"
+              secondIndicator={` ${metrics?.grossMarginLongTermTrend ?? "-"}`}
+              secondClassName={colorcodeTrend(
+                metrics?.grossMarginLongTermTrend
+              )}
+            />
+          </div>
+        )}
 
       <div className="flex flex-col col-span-full  bg-white rounded-xl sm:col-span-3 xl:col-span-2">
         <MetricsCardWithTwoIndicators
@@ -239,7 +245,7 @@ function EarningsWidget({ metrics }: { metrics: Metrics }) {
           {metrics?.sharesChangeTtm?.toFixed(2) ?? "-"}%
         </div> */}
       </div>
-      {metrics?.retainedEarningsTtm && (
+      {metrics?.retainedEarningsTtm !== 0 && metrics?.retainedEarningsTtm && (
         <div className="flex flex-col col-span-full  bg-white rounded-xl sm:col-span-3 xl:col-span-2">
           <MetricsCardWithSingleIndicator
             title="Retained Earnings (TTM) in M"

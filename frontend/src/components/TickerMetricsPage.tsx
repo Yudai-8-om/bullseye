@@ -186,24 +186,26 @@ function TickerMetricsPage(props: MetricsPageProps) {
               <ul className="space-y-2.5">
                 {metrics?.grossMarginLongTermTrend == "Uptrend" &&
                   metrics?.grossMarginShortTermTrend == "Uptrend" && (
-                    <li>Gross margin is improving.</li>
+                    <li>The company likely has strong pricing power. </li>
                   )}
                 {metrics?.sgaLongTermTrend == "Downtrend" && (
-                  <li>Customer aquisition effort is shrinking.</li>
+                  <li>
+                    The company is likely spending less to retain/acquire
+                    customers.
+                  </li>
                 )}
                 {metrics?.rndLongTermTrend == "Downtrend" && (
-                  <li>R&D cost required is not high.</li>
+                  <li>
+                    R&D cost required to maintain growth is likely getting
+                    lower.
+                  </li>
                 )}
                 {metrics?.operatingMarginLongTermTrend == "Uptrend" && (
-                  <li>The company has higher operating leverge.</li>
+                  <li>Operational efficiency is increasing.</li>
                 )}
-                {typeof metrics?.interestExpenseRatioTtm === "number" &&
-                  metrics?.interestExpenseRatioTtm >= -0.15 && (
-                    <li>Intrest expense is low.</li>
-                  )}
                 {typeof metrics?.sharesChangeTtm === "number" &&
                   metrics?.sharesChangeTtm <= 0 && (
-                    <li>Share is not diluted.</li>
+                    <li>The company is actively buying back its shares.</li>
                   )}
               </ul>
             </div>
@@ -212,16 +214,19 @@ function TickerMetricsPage(props: MetricsPageProps) {
               <ul className="space-y-2.5">
                 {(metrics?.grossMarginLongTermTrend == "Downtrend" ||
                   metrics?.grossMarginShortTermTrend == "Downtrend") && (
-                  <li>Gross margin is not improving.</li>
+                  <li>The company likely has weak pricing power.</li>
                 )}
                 {metrics?.sgaLongTermTrend == "Uptrend" && (
-                  <li>Customer aquisition effort is expanding.</li>
+                  <li>
+                    The company is likely spending more to retain/acquire
+                    customers.
+                  </li>
                 )}
                 {metrics?.rndLongTermTrend == "Uptrend" && (
                   <li>The company is expanding R&D to survive.</li>
                 )}
                 {metrics?.operatingMarginLongTermTrend == "Downtrend" && (
-                  <li>The company has lower operating leverge.</li>
+                  <li>Operational efficiency is decreasing.</li>
                 )}
                 {typeof metrics?.interestExpenseRatioTtm === "number" &&
                   metrics?.interestExpenseRatioTtm < -0.15 && (

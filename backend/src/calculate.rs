@@ -5,9 +5,15 @@ pub fn calculate_price_target_option(
     growth_pct: Option<f64>,
     share_change: Option<f64>,
 ) -> Option<f64> {
-    eps.zip(growth_pct)
-        .zip(share_change)
-        .map(|((e, g), s)| e * calculate_growth_adjustment_factor(g - s))
+    eps.zip(growth_pct).zip(share_change).map(|((e, g), s)| {
+        if s > 50. {
+            e * calculate_growth_adjustment_factor(g - 50.)
+        } else if s < -10. {
+            e * calculate_growth_adjustment_factor(g + 10.)
+        } else {
+            e * calculate_growth_adjustment_factor(g - s)
+        }
+    })
 }
 
 pub fn calculate_growth_adjustment_factor(growth: f64) -> f64 {
@@ -212,9 +218,10 @@ pub fn calculate_ratio_as_pct_option(value: Option<f64>, total: Option<f64>) -> 
 
 pub fn get_net_margin_factor(industry: &str) -> f64 {
     match industry {
-        "Airlines" => 20.,
+        "Airlines" | "Healthcare Plans" | "Financial Conglomerates" => 20.,
         "Grocery Stores" | "Department Stores" => 9.,
-        "Discount Stores" => 6.,
+        "Insurance - Property & Casualty" => 8.,
+        "Discount Stores" | "Auto & Truck Dealerships" => 6.,
         "Apparel Retail" | "Apparel Manufacturing" | "Footwear & Accessories" => 5.,
         "Banks - Diversified" | "Banks - Regional" => 4.,
         "Internet Retail" | "Specialty Retail" => 3.5,
