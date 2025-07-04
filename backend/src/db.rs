@@ -13,15 +13,12 @@ use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error as DieselError;
+use dotenvy::dotenv;
+use std::env;
 
-// pub fn establish_connection() -> PgConnection {
-//     let database_url = "postgres://testuser:stock@localhost/bullseye_db";
-//     PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
-// }
-
-/// establishes connection pool
 pub fn establish_connection_pool() -> Result<Pool<ConnectionManager<PgConnection>>, BullsEyeError> {
-    let database_url = "postgres://testuser:stock@localhost/bullseye_db";
+    dotenv().ok();
+    let database_url = env::var("DATABASE_URL")?;
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Pool::builder().build(manager);
     match pool {
@@ -45,6 +42,21 @@ where
 {
     data.iter().map(f).collect()
 }
+
+/// joins all necessary tables for the list view
+pub fn join_data(
+    conn: &mut PgConnection,
+) -> Result<Vec<(Company, CurrentMetrics, Forecasts)>, DieselError> {
+    use crate::schema::companies::dsl::*;
+    use crate::schema::current_metrics::dsl::*;
+    use crate::schema::forecasts::dsl::*;
+    let all_data = companies
+        .inner_join(current_metrics)
+        .inner_join(forecasts)
+        .load::<(Company, CurrentMetrics, Forecasts)>(conn)?;
+    Ok(all_data)
+}
+
 /// updates all missing ratios for all earnings data
 pub fn update_ratios_batch(conn: &mut PgConnection) -> Result<(), DieselError> {
     use crate::schema::earnings_report::dsl::*;

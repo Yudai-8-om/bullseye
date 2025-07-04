@@ -17,7 +17,7 @@ pub struct Company {
     pub id: i32,
     pub company_name: String,
     pub industry: String,
-    isin: String,
+    pub isin: String,
     pub exchange: String,
     pub ticker: String,
     last_updated: NaiveDate,
@@ -51,7 +51,7 @@ impl Company {
         Ok(target)
     }
     pub fn ticker_check_needed(&self) -> bool {
-        Local::now().date_naive() - self.last_updated >= Duration::days(30)
+        Local::now().date_naive() - self.last_updated >= Duration::days(90)
     }
 }
 

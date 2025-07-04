@@ -59,6 +59,13 @@ async fn search(
         all_forecasts,
     )))
 }
+async fn list_all(
+    State(pool): State<Pool<ConnectionManager<PgConnection>>>,
+) -> Result<Json<Vec<ReturningModel>>, BullsEyeError> {
+    let conn = &mut pool.get().unwrap();
+    let all_companies: Vec<ReturningModel> = services::get_all_companies(conn)?;
+    Ok(Json(all_companies))
+}
 
 // #[derive(Deserialize)]
 // struct Params {
@@ -94,9 +101,8 @@ async fn main() {
     // .allow_methods([Method::GET, Method::POST]);
     let pool = establish_connection_pool().unwrap();
     let app = Router::new()
-        // .route("/", get(|| async { "Hello, World!" }))
-        .route("/search/{ticker}", get(search))
-        // .route("/simulate/{ticker}/{net_margin}/{growth}", get(simulate))
+        .route("/screener", get(list_all))
+        .route("/companies/{ticker}", get(search))
         .with_state(pool)
         .layer(cors);
 

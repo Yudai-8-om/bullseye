@@ -18,9 +18,9 @@ pub fn calculate_price_target_option(
 
 pub fn calculate_growth_adjustment_factor(growth: f64) -> f64 {
     let (punishment, adjusted_growth) = match growth {
-        val if val > 50. => (0.6, 1.5),
-        val if val > 40. => (0.6 + 0.2 * (50. - val) / 10., 1. + val / 100.),
-        val if val > 20. => (0.8 + 0.2 * (40. - val) / 20., 1. + val / 100.),
+        val if val > 60. => (0.6, 1.6),
+        val if val > 50. => (0.6 + 0.2 * (60. - val) / 10., 1. + val / 100.),
+        val if val > 30. => (0.8 + 0.2 * (50. - val) / 20., 1. + val / 100.),
         val if val > 1. => (1., 1. + val / 100.),
         _ => (1., 1.01),
     };
@@ -231,7 +231,8 @@ pub fn get_net_margin_factor(industry: &str) -> f64 {
         | "Auto Manufacturers"
         | "Auto Parts"
         | "Consumer Electronics"
-        | "Electrical Equipment & Parts" => 2.,
+        | "Electrical Equipment & Parts"
+        | "Internet Content & Information" => 2.,
         _ => 3.,
     }
 }

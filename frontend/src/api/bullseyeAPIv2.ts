@@ -3,7 +3,7 @@ import { Metrics } from "../api/Metrics";
 const baseUrl = "http://localhost:3000";
 
 export async function getMetrics(ticker: string): Promise<Metrics> {
-  const url = `${baseUrl}/search/${ticker.toLowerCase()}`;
+  const url = `${baseUrl}/companies/${ticker.toLowerCase()}`;
   try {
     const metrics = await fetchData<Metrics>(url);
     console.log(JSON.stringify(metrics, null, 2));

@@ -5,6 +5,7 @@ use crate::models::earnings_model;
 use crate::models::earnings_model::NewEarningsReport;
 use crate::models::forecast_models::NewForecasts;
 use crate::models::metrics_model::{CurrentMetrics, NewCurrentMetrics};
+use crate::models::returning_model::ReturningModel;
 use crate::query;
 use bullseye_api::model::get_exchange_string;
 use bullseye_api::model::Exchange;
@@ -43,6 +44,16 @@ pub async fn get_company(
         new_forecast_entry.insert_new_forecast(conn)?;
         Ok(new_company)
     }
+}
+
+///returns vector of returning model for the list view
+pub fn get_all_companies(conn: &mut PgConnection) -> Result<Vec<ReturningModel>, BullsEyeError> {
+    let joined_db = db::join_data(conn)?;
+    let returning_vec = joined_db
+        .into_iter()
+        .map(|(company, metrics, forecast)| ReturningModel::new(company, metrics, forecast))
+        .collect();
+    Ok(returning_vec)
 }
 
 /// runs after Q4 Earnings or for the initial update.

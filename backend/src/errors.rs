@@ -14,6 +14,8 @@ pub enum BullsEyeError {
     DbPoolError,
     #[error(transparent)]
     DateParseError(#[from] chrono::format::ParseError),
+    #[error(transparent)]
+    EnvVarError(#[from] std::env::VarError),
 }
 
 impl IntoResponse for BullsEyeError {
@@ -34,6 +36,7 @@ impl IntoResponse for BullsEyeError {
             BullsEyeError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             BullsEyeError::DbPoolError => StatusCode::INTERNAL_SERVER_ERROR,
             BullsEyeError::DateParseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            BullsEyeError::EnvVarError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status, self.to_string()).into_response()
