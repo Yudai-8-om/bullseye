@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface SearchBarProps {
   onSearch: (ticker: string) => void;
@@ -6,6 +7,7 @@ interface SearchBarProps {
 
 function SearchBar({ onSearch }: SearchBarProps) {
   const [searchTerm, updateSearchTerm] = useState<string>("");
+  const navigate = useNavigate();
   const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     let { value } = event.target;
     updateSearchTerm(value);
@@ -13,24 +15,22 @@ function SearchBar({ onSearch }: SearchBarProps) {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     onSearch(searchTerm);
+    navigate("/search");
   };
 
   return (
-    <header className="bg-green-400 py-4 h-20 flex items-center justify-around">
-      <div className="font-bold text-2xl">BullsEye</div>
-      <div className="bg-white rounded-xl border border-black">
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="ticker"
-            value={searchTerm}
-            placeholder="Search Ticker"
-            onChange={handleInput}
-            className="ps-3"
-          />
-        </form>
-      </div>
-    </header>
+    <div className="bg-white rounded-xl border border-black">
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          name="ticker"
+          value={searchTerm}
+          placeholder="Search Ticker"
+          onChange={handleInput}
+          className="ps-3"
+        />
+      </form>
+    </div>
   );
 }
 

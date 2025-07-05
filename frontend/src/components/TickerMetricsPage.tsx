@@ -3,7 +3,7 @@ import { HeartIcon } from "@heroicons/react/24/outline";
 import EarningsWidget from "./EarningsWidget";
 
 interface MetricsPageProps {
-  metrics: Metrics;
+  metrics: Metrics | undefined;
   loading: boolean;
   error: string | undefined;
 }
@@ -36,7 +36,6 @@ function TickerMetricsPage(props: MetricsPageProps) {
     const vals = targets.filter((val) => val !== undefined && val !== null);
     return vals.length > 0 ? Math.min(...vals).toFixed(2) : undefined;
   }
-
   return (
     <div>
       {error && (
@@ -83,7 +82,7 @@ function TickerMetricsPage(props: MetricsPageProps) {
 
                   {metrics?.nextEarningsDate?.toString() ?? "-"}
                 </p>
-                <EarningsWidget metrics={metrics} />
+                {metrics && <EarningsWidget metrics={metrics} />}
               </div>
             </div>
             <div className="col-span-7 lg:col-span-3 px-2">
