@@ -1,16 +1,24 @@
 // use axum::http::StatusCode;
-use axum::{extract::Path, extract::State, routing::get, Json, Router};
+use axum::{
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::Path,
+    extract::State,
+    response::Response,
+    routing::get,
+    Json, Router,
+};
 use db::{establish_connection_pool, lookup_exchange};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use errors::BullsEyeError;
+use http::Method;
 use models::earnings_model::EarningsReport;
 use models::forecast_models::Forecasts;
 use models::metrics_model::CurrentMetrics;
 use models::returning_model::ReturningModel;
-use tower_http::cors::{Any, CorsLayer};
-// use serde::Deserialize;
-// use http::Method;
+use rand::Rng;
+use tokio::time::{self, Duration};
+use tower_http::cors::CorsLayer;
 
 mod calculate;
 mod db;
@@ -67,42 +75,44 @@ async fn list_all(
     Ok(Json(all_companies))
 }
 
-// #[derive(Deserialize)]
-// struct Params {
-//     ticker: String,
-//     net_margin: u8,
-//     growth: u8,
-// }
+async fn get_stock_price(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(|socket| handle_socket(socket))
+}
 
-// async fn simulate(Path(params): Path<Params>) {
-//     let exchange = match params.ticker.parse::<u64>() {
-//         Ok(_) => model::Exchange::TSE,
-//         Err(_) => model::Exchange::NASDAQ,
-//     };
-//     let conn = &mut db::establish_connection();
-//     let sim_price = db::run_sim(
-//         &params.ticker,
-//         model::get_exchange_string(&exchange),
-//         params.net_margin,
-//         params.growth,
-//         conn,
-//     );
-//     println!("Simulated Price: {sim_price}");
-// }
+async fn handle_socket(mut socket: WebSocket) {
+    let mut interval = time::interval(Duration::from_millis(100));
+    loop {
+        interval.tick().await;
+        let sample = {
+            let mut rng = rand::rng();
+            100.0 + (rng.random::<f64>() * 50.0)
+        };
+        if socket
+            .send(Message::Text(format!("Price: {}", sample).into()))
+            .await
+            .is_err()
+        {
+            return;
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
     // build our application with a single route
-    // let allowed_origins = vec![
-    //     "http://localhost:5173".parse().unwrap(),
-    //     "http://localhost:3000".parse().unwrap(),
-    // ];
-    let cors = CorsLayer::new().allow_origin(Any);
-    // .allow_methods([Method::GET, Method::POST]);
+    let allowed_origins = vec![
+        "http://localhost".parse().unwrap(),
+        "http://localhost:80".parse().unwrap(),
+        "http://localhost:5173".parse().unwrap(), // only dev
+    ];
+    let cors = CorsLayer::new()
+        .allow_origin(allowed_origins)
+        .allow_methods([Method::GET]);
     let pool = establish_connection_pool().unwrap();
     let app = Router::new()
         .route("/screener", get(list_all))
         .route("/companies/{ticker}", get(search))
+        .route("/wstest", get(get_stock_price))
         .with_state(pool)
         .layer(cors);
 

@@ -1,0 +1,47 @@
+services:
+  postgres_db:
+    image: postgres:17
+    container_name: postgres_db
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bullseye_backend:
+    build: ./backend
+    container_name: bullseye_backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+      - SELENIUM_URL=http://chromedriver:4444
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      chromedriver:
+        condition: service_started
+
+  bullseye_frontend:
+    build: ./frontend
+    container_name: bullseye_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - bullseye_backend
+
+  chromedriver:
+    image: selenium/standalone-chrome:latest
+    container_name: chromedriver
+    ports:
+      - "4444:4444"
+volumes:
+  postgres_db:

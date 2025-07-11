@@ -5,6 +5,7 @@ import { Routes, Route, NavLink } from "react-router-dom";
 import { useState } from "react";
 import { getMetrics } from "./api/bullseyeAPIv2";
 import { Metrics } from "./api/Metrics";
+import WebSocketComponent from "./components/websocket";
 
 function App() {
   const [ticker, setTicker] = useState<string | null>(null);
@@ -62,6 +63,14 @@ function App() {
                 loading={loading}
                 error={error}
               />
+            }
+          />
+          <Route
+            path="/wstest"
+            element={
+              <div className="p-4">
+                <WebSocketComponent />
+              </div>
             }
           />
         </Routes>

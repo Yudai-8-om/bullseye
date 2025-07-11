@@ -13,11 +13,11 @@ use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error as DieselError;
-use dotenvy::dotenv;
+// use dotenvy::dotenv;
 use std::env;
 
 pub fn establish_connection_pool() -> Result<Pool<ConnectionManager<PgConnection>>, BullsEyeError> {
-    dotenv().ok();
+    // dotenv().ok();
     let database_url = env::var("DATABASE_URL")?;
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Pool::builder().build(manager);

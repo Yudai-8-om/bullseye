@@ -33,6 +33,9 @@ impl IntoResponse for BullsEyeError {
             BullsEyeError::ScraperError(ScraperError::MissingProfileError()) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            BullsEyeError::ScraperError(ScraperError::EnvVarError(_)) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             BullsEyeError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             BullsEyeError::DbPoolError => StatusCode::INTERNAL_SERVER_ERROR,
             BullsEyeError::DateParseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
