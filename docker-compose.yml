@@ -39,9 +39,15 @@ services:
       - bullseye_backend
 
   chromedriver:
-    image: selenium/standalone-chrome:latest
+    image: selenium/standalone-chrome:137.0.7151.119-chromedriver-137.0.7151.119-20250707
     container_name: chromedriver
+    shm_size: 2gb
     ports:
       - "4444:4444"
+    environment:
+      - SE_ENABLE_BROWSER_LEFTOVERS_CLEANUP=true
+      - SE_BROWSER_LEFTOVERS_INTERVAL_SECS=1800
+      - SE_BROWSER_LEFTOVERS_PROCESSES_SECS=3600
+
 volumes:
   postgres_db:
